@@ -1,0 +1,1537 @@
+<!doctype html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Llenado de Time & Action · LIVES</title>
+<!-- ===== lives-cargando v1.2 · 2026-10-12 · aviso "Cargando datos…" cuando la pantalla abre VACÍA esperando datos.
+     Va al inicio del <head>. Al terminar de leer la página (antes de que se vea) mira si hay contenido: si está vacía
+     (menos de 120 letras visibles) muestra de inmediato el logo, el círculo y "Cargando datos…", sin dejar ver la
+     pantalla a medio armar; se quita en cuanto aparece el contenido, cuando terminan las consultas a la base, si en
+     1.5 s no hubo ninguna consulta, o a los 15 s. Si la pantalla ya tiene contenido (formularios, pantallas con su
+     propio aviso de carga) no aparece nunca. ===== -->
+<style id="lsCargaCss">
+#lsCarga{position:fixed;inset:0;z-index:2147482000;background:#F1F6F4;display:flex;flex-direction:column;
+  align-items:center;justify-content:center;gap:14px;font-family:Calibri,Arial,sans-serif;text-align:center;padding:24px;
+  transition:opacity .25s ease}
+#lsCarga.lsFuera{opacity:0;pointer-events:none}
+#lsCarga img{height:34px;opacity:.82}
+#lsCarga .lsGiro{width:38px;height:38px;border-radius:50%;border:3.5px solid #DCE5E2;border-top-color:#0F7A5A;
+  animation:lsGiro .9s linear infinite}
+#lsCarga b{font-size:16px;color:#0E3B36}
+@keyframes lsGiro{to{transform:rotate(360deg)}}
+html.lsDecide body{visibility:hidden}
+html.lsDecide{background:#F1F6F4}
+@media print{#lsCarga{display:none!important}}
+</style>
+<script id="lsCargaJs">(function(){
+  'use strict';
+  if (window.__lsCarga) return; window.__lsCarga = true;
+  /* Mientras se lee la página no se dibuja nada a medio armar; se decide al terminar de leerla (máx. 2.5 s). */
+  var raiz = document.documentElement; raiz.classList.add('lsDecide');
+  var soltar = function(){ raiz.classList.remove('lsDecide'); };
+  setTimeout(soltar, 2500);
+  var pend = 0, visto = false, listo = false, el = null, tCalma = null;
+  var esBase = function(u){ return /supabase\.co|\/rest\/v1\/|\/functions\/v1\/|\/auth\/v1\//.test(String(u || '')); };
+  /* ¿La pantalla sigue vacía? Cuenta solo letras visibles de verdad (sin menús desplegables ni avisos comunes). */
+  function letrasVisibles(){
+    if (!document.body) return 0;
+    var n = 0, w = document.createTreeWalker(document.body, NodeFilter.SHOW_TEXT, null), t;
+    while ((t = w.nextNode())){
+      var p = t.parentElement; if (!p) continue;
+      if (p.closest('script,style,select,option,noscript,#lsCarga,#lsAct,#lsMud')) continue;
+      var x = t.nodeValue.replace(/\s+/g, ''); if (!x) continue;
+      if (!p.offsetParent && getComputedStyle(p).position !== 'fixed') continue;
+      n += x.length; if (n >= 120) return n;
+    }
+    return n;
+  }
+  function vacia(){ return letrasVisibles() < 120; }
+  function crear(){
+    if (el || listo) return;
+    if (!document.body){ setTimeout(crear, 30); return; }
+    el = document.createElement('div'); el.id = 'lsCarga'; el.setAttribute('role', 'status'); el.setAttribute('aria-live', 'polite');
+    el.innerHTML = '<img alt="LIVES" src="data:image/png;base64,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">' +
+                   '<div class="lsGiro" aria-hidden="true"></div><b>Cargando datos…</b>';
+    document.body.appendChild(el);
+  }
+  function terminar(){
+    if (listo) return; listo = true; soltar();
+    clearTimeout(tCalma);
+    if (el){ el.classList.add('lsFuera'); var e = el; setTimeout(function(){ if (e.parentNode) e.parentNode.removeChild(e); }, 300); }
+  }
+  /* Decide al terminar de leer la página (antes de que se vea): si la pantalla está vacía, el aviso sale
+     de inmediato, sin mostrar antes la pantalla a medio armar; si ya tiene contenido, no sale nunca. */
+  var vig = null;
+  function decidir(){
+    if (listo){ soltar(); return; }
+    if (!vacia()){ soltar(); terminar(); return; }
+    crear(); soltar();
+    vig = setInterval(function(){
+      if (listo){ clearInterval(vig); return; }
+      if (!vacia()) terminar();                          /* ya hay contenido: se quita en el acto */
+      else if (!visto && Date.now() - t0 > 1500) terminar(); /* no consulta la base (p. ej. espera un Excel) */
+    }, 80);
+  }
+  var t0 = Date.now();
+  function inicio(){
+    if (listo) return;
+    pend++; visto = true;
+    clearTimeout(tCalma);
+  }
+  function fin(){
+    if (listo) return;
+    pend = Math.max(0, pend - 1);
+    if (pend === 0){ clearTimeout(tCalma); tCalma = setTimeout(function(){ if (pend === 0) terminar(); }, 600); }
+  }
+  if (window.fetch){
+    var f0 = window.fetch;
+    window.fetch = function(entrada){
+      var u = (entrada && entrada.url) ? entrada.url : entrada;
+      var mio = !listo && esBase(u);
+      if (mio) inicio();
+      var p = f0.apply(this, arguments);
+      if (mio) p.then(function(r){ fin(); return r; }, function(){ fin(); });
+      return p;
+    };
+  }
+  if (window.XMLHttpRequest){
+    var o0 = XMLHttpRequest.prototype.open, s0 = XMLHttpRequest.prototype.send;
+    XMLHttpRequest.prototype.open = function(m, u){ this.__lsBase = esBase(u); return o0.apply(this, arguments); };
+    XMLHttpRequest.prototype.send = function(){
+      if (this.__lsBase && !listo){ inicio(); this.addEventListener('loadend', fin); }
+      return s0.apply(this, arguments);
+    };
+  }
+  /* Se decide al terminar de leer la página (antes del primer dibujo completo). Tope: 15 s. */
+  var decidirYa = function(){ setTimeout(decidir, 0); }; /* después de los arranques propios de la página */
+  if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', decidirYa); else decidirYa();
+  setTimeout(terminar, 15000);
+})();</script>
+<!-- ===== fin lives-cargando v1.2 ===== -->
+<!-- ============================================================================
+     LIVES · SESIÓN DEL PORTAL EN LAS HERRAMIENTAS            lives-sesion v5.2 · 2026-10-06
+     Bloque común: es idéntico en todas las herramientas. Si se corrige, se corrige en
+     todas. No depende de nada de la página.
+     · Toma la sesión del portal LIVES (misma dirección github.io, se comparte sola).
+     · v4 · SIN BLOQUEO: la herramienta abre SIEMPRE. Ya no aparece "Abre esto desde el
+       portal". Si hay sesión del portal, todo funciona como antes (nombre, llave,
+       permisos, supervisión). Si no hay sesión (por ejemplo, abierta desde el portal de
+       Sistemas), abre igual y lee con la clave pública.
+     · Toda lectura a Supabase sale con la llave de la persona (si la hay) y la renueva
+       antes de que venza (1 hora) sin chocar con el portal ni con otras pestañas.
+     · El nombre de quien trabaja sale de la sesión: ?usuario= se reescribe con el real.
+       Sin sesión, ?usuario= queda como venga en la dirección.
+     · MODO SUPERVISIÓN (desde v3): Rodrigo (rcamogliano) ve y usa todo, nada se guarda.
+       Christian (ctalepcio) tiene acceso completo. Solo aplica con sesión del portal.
+     · v5 · PUENTE CON EL PORTAL DE SISTEMAS (temporal, riesgo aceptado por Christian el
+       06/10/2026): si no hay sesión del portal LIVES y el link trae ?usuario=Nombre+Apellido,
+       se pide a Supabase (función sesion-sistemas) la sesión de esa persona y la herramienta
+       se recarga una vez ya con su nombre y sus permisos. El nombre no se verifica hasta que
+       Sistemas firme el link. Esa sesión vive solo en la pestaña (no pasa al portal LIVES) y
+       se descarta si el link trae otro nombre. Cuentas excluidas: las define Supabase.
+     · v5.1 · NOMBRE AL DÍA: al abrir, se pregunta a Supabase el nombre vigente de quien
+       tiene la sesión (mi_nombre). Si cambió (p. ej. por los nombres de Sistemas) se corrige
+       la sesión guardada y la pantalla se recarga una sola vez con el nombre nuevo.
+     · v5.2 · PORTAL NUEVO: el puente avisa si la herramienta está abierta dentro de
+       app.lives.com.pe. Solo así Supabase acepta por el puente a Christian y a Rodrigo
+       (Rodrigo siempre en supervisión). Con un link suelto, ellos no entran por el puente.
+     ============================================================================ -->
+<style id="lsCss">
+#lsSup{position:fixed;right:12px;bottom:12px;z-index:2147482000;background:#0E3B36;color:#fff;
+  font-family:Calibri,Arial,sans-serif;font-size:12.5px;font-weight:700;border-radius:999px;padding:7px 14px;
+  box-shadow:0 4px 14px rgba(14,59,54,.25);border:2px solid #10B981;pointer-events:none;opacity:.92;}
+#lsToast{position:fixed;left:50%;bottom:56px;transform:translateX(-50%);z-index:2147482001;background:#B45309;
+  color:#fff;font-family:Calibri,Arial,sans-serif;font-size:14px;font-weight:700;border-radius:10px;
+  padding:11px 18px;box-shadow:0 8px 24px rgba(0,0,0,.25);display:none;max-width:90vw;text-align:center;}
+</style>
+<script id="lsJs">
+(function(){
+  'use strict';
+  if (window.LIVES_SESION) return;                       /* por si el bloque quedara dos veces */
+
+  var SB_URL  = 'https://xxfufpddgoyhbotjmaiy.supabase.co';
+  var SB_KEY  = 'sb_publishable_1g-n6UT70EUlNAo8Lyc04w_jKR4LpXZ';
+  var CLAVE   = 'lives_portal_sesion';                   /* misma llave que usa el portal */
+  var CANDADO = 'lives_sb_renovando';
+  var MOVIL   = /Android|iPhone|iPad|iPod/i.test(navigator.userAgent || '');
+  var GRACIA  = (MOVIL ? 720 : 60) * 60000;              /* igual que el portal */
+  var fetchBase = window.fetch.bind(window);
+  var yo = Math.random().toString(36).slice(2);
+
+  /* ---------- guardar y leer la sesión (mismo formato que el portal) ---------- */
+  function leerJ(area, k){ try{ return JSON.parse(area.getItem(k) || 'null'); }catch(e){ return null; } }
+  function valida(d){
+    return !!(d && d.token && d.permisos && d.sb && d.sb.access && d.sb.refresh);
+  }
+
+  /* La sesión vigente. Si hay dos copias (la de esta pestaña y el respaldo común) y son
+     de la misma persona, se queda con la llave más nueva: otra pestaña o el portal pudo
+     renovarla, y usar una llave ya renovada cierra la sesión en Supabase. */
+  function sesion(){
+    var s = null, r = null;
+    try{ s = leerJ(sessionStorage, CLAVE); }catch(e){}
+    try{
+      var x = leerJ(localStorage, CLAVE + '_resp');
+      if (x && valida(x.d) && (Date.now() - x.ts) < GRACIA) r = x.d;
+    }catch(e){}
+    if (!valida(s)) s = null;
+    if (!s && r){ s = r; try{ sessionStorage.setItem(CLAVE, JSON.stringify(s)); }catch(e){} }
+    if (s && r && r.usuario === s.usuario && r.sb && (!s.sb || r.sb.exp > s.sb.exp)){
+      s.sb = r.sb;
+      try{ sessionStorage.setItem(CLAVE, JSON.stringify(s)); }catch(e){}
+    }
+    return s;
+  }
+  function guardar(d){
+    try{ sessionStorage.setItem(CLAVE, JSON.stringify(d)); }catch(e){}
+    if (d && d.origen === 'sistemas') return;            /* sesión del puente: solo en esta pestaña */
+    try{ localStorage.setItem(CLAVE + '_resp', JSON.stringify({ d: d, ts: Date.now() })); }catch(e){}
+  }
+  function borrar(){
+    try{ sessionStorage.removeItem(CLAVE); }catch(e){}
+    try{ localStorage.removeItem(CLAVE + '_resp'); }catch(e){}
+  }
+  /* Mientras se usa la herramienta, el respaldo cuenta desde la última actividad. */
+  function refrescarMarca(){
+    var s = sesion(); if (!s || s.origen === 'sistemas') return;
+    try{ localStorage.setItem(CLAVE + '_resp', JSON.stringify({ d: s, ts: Date.now() })); }catch(e){}
+  }
+  setInterval(refrescarMarca, 60000);
+  document.addEventListener('visibilitychange', function(){ if (!document.hidden) refrescarMarca(); });
+
+  function equipo(){
+    var n = navigator.userAgent || '';
+    var so = /Android/i.test(n) ? 'Android' : /iPhone|iPad/i.test(n) ? 'iPhone/iPad'
+           : /Windows/i.test(n) ? 'Windows' : /Mac/i.test(n) ? 'Mac' : 'Otro';
+    return so + (window.top === window ? ' · suelta' : '');
+  }
+
+  function pedir(ruta, cuerpo, token, ms){
+    var ctl = (typeof AbortController !== 'undefined') ? new AbortController() : null;
+    var reloj = setTimeout(function(){ if (ctl) ctl.abort(); }, ms || 15000);
+    var cab = { 'Content-Type': 'application/json', apikey: SB_KEY };
+    if (token) cab.Authorization = 'Bearer ' + token;
+    return fetchBase(SB_URL + ruta, { method: 'POST', headers: cab, body: JSON.stringify(cuerpo || {}),
+                                      cache: 'no-store', signal: ctl ? ctl.signal : undefined })
+      .then(function(r){
+        clearTimeout(reloj);
+        return r.text().then(function(t){
+          var j = null; try{ j = t ? JSON.parse(t) : null; }catch(e){}
+          return { status: r.status, ok: r.ok, json: j };
+        });
+      }, function(e){ clearTimeout(reloj); throw e; });
+  }
+  function esperar(ms){ return new Promise(function(ok){ setTimeout(ok, ms); }); }
+
+  /* ---------- llave vigente, renovada sin chocar con otras pestañas ---------- */
+  var renovando = null;
+  function llave(forzar){
+    var s = sesion();
+    if (!s || !s.sb || !s.sb.refresh) return Promise.resolve(null);
+    if (!forzar && s.sb.exp - Date.now() > 60000) return Promise.resolve(s.sb.access);
+    if (renovando) return renovando;
+    var usada = s.sb.refresh;
+    renovando = (function intento(n){
+      var c = leerJ(localStorage, CANDADO);
+      if (c && c.hasta > Date.now() && c.quien !== yo && n < 4){
+        /* Otra pestaña o el portal está renovando: se espera y se usa lo que deje. */
+        return esperar(1500).then(function(){
+          var s2 = sesion();
+          if (s2 && s2.sb && s2.sb.refresh !== usada && s2.sb.exp - Date.now() > 60000) return s2.sb.access;
+          return intento(n + 1);
+        });
+      }
+      try{ localStorage.setItem(CANDADO, JSON.stringify({ quien: yo, hasta: Date.now() + 10000 })); }catch(e){}
+      return pedir('/auth/v1/token?grant_type=refresh_token', { refresh_token: usada })
+        .then(function(r){
+          if (r.ok && r.json && r.json.access_token){
+            var s3 = sesion() || s;
+            s3.sb = { access: r.json.access_token, refresh: r.json.refresh_token,
+                      exp: Date.now() + (Number(r.json.expires_in) || 3600) * 1000 };
+            guardar(s3);
+            return s3.sb.access;
+          }
+          /* Rechazada: puede que otra pestaña la haya renovado un instante antes. */
+          var s4 = sesion();
+          if (s4 && s4.sb && s4.sb.refresh !== usada && s4.sb.exp - Date.now() > 60000) return s4.sb.access;
+          /* v5: si la sesión del puente ya no se puede renovar, se descarta para que la
+             próxima vez que se abra una herramienta el puente la vuelva a pedir. */
+          if (r.status >= 400 && r.status < 500 && s.origen === 'sistemas'){
+            borrar(); try{ sessionStorage.removeItem('lives_puente_recargado'); }catch(e){}
+          }
+          return null;
+        }, function(){ return null; })                                             /* sin señal */
+        .then(function(tk){
+          try{ var c2 = leerJ(localStorage, CANDADO); if (c2 && c2.quien === yo) localStorage.removeItem(CANDADO); }catch(e){}
+          return tk;
+        });
+    })(0).then(function(tk){ renovando = null; return tk; }, function(){ renovando = null; return null; });
+    return renovando;
+  }
+
+  /* ---------- toda lectura a Supabase sale con la llave de la persona ---------- */
+  function conLlave(init, tk){
+    var o = {}, k;
+    init = init || {};
+    for (k in init) o[k] = init[k];
+    var h = {};
+    if (init.headers && typeof init.headers.forEach === 'function' && !(init.headers instanceof Array)){
+      init.headers.forEach(function(v, n){ h[n] = v; });
+    } else if (init.headers){
+      for (k in init.headers) h[k] = init.headers[k];
+    }
+    var tiene = false;
+    for (k in h) if (k.toLowerCase() === 'authorization') tiene = true;
+    if (!tiene && tk) h.Authorization = 'Bearer ' + tk;
+    var tieneKey = false;
+    for (k in h) if (k.toLowerCase() === 'apikey') tieneKey = true;
+    if (!tieneKey) h.apikey = SB_KEY;
+    o.headers = h;
+    return o;
+  }
+
+  /* ---------- MODO SUPERVISIÓN (desde v3) ---------- */
+  /* Solo Rodrigo supervisa. Christian (ctalepcio) tiene acceso completo y guarda en
+     todas las herramientas (lo da Supabase con es_superusuario()). */
+  var SUPERVISORES = ['rcamogliano'];
+  function supervisando(){
+    var s = sesion(); if (!s) return false;
+    return SUPERVISORES.indexOf(String(s.usuario || '').trim().toLowerCase()) !== -1;
+  }
+  /* El bloqueo de verdad lo hace Supabase: para los supervisores, todo pedido que intenta
+     guardar corre en modo "solo lectura" y la base lo rechaza (y los archivos tampoco se
+     suben). Aquí solo se deja la pantalla activa y se avisa con claridad. */
+  var RPC_PUEDE = /(puede|permiso|es_editor|editor_de)/i;
+  function rutaSB(url){ return url.indexOf(SB_URL) === 0 ? url.slice(SB_URL.length).split('?')[0] : ''; }
+  function esRechazoSup(txt){ return /read-only transaction|solo lectura|SUPERVISION/i.test(txt || ''); }
+  var _toastT = null;
+  function avisoSup(txt){
+    function poner(){
+      var t = document.getElementById('lsToast');
+      if (!t){ t = document.createElement('div'); t.id = 'lsToast'; document.body.appendChild(t); }
+      t.textContent = txt; t.style.display = 'block';
+      clearTimeout(_toastT); _toastT = setTimeout(function(){ t.style.display = 'none'; }, 4500);
+    }
+    if (document.body) poner(); else document.addEventListener('DOMContentLoaded', poner);
+  }
+  function marcaSup(){
+    if (!supervisando() || document.getElementById('lsSup')) return;
+    var b = document.createElement('div'); b.id = 'lsSup';
+    b.textContent = '👁️ Modo supervisión · puedes usar todo, nada se guarda';
+    document.body.appendChild(b);
+  }
+  if (document.body) marcaSup(); else document.addEventListener('DOMContentLoaded', marcaSup);
+  function respuesta(cuerpo, estado){
+    return new Response(JSON.stringify(cuerpo), { status: estado,
+      headers: { 'Content-Type': 'application/json' } });
+  }
+
+  /* Para supervisores: "¿puede editar?" pasa a sí, y los rechazos por solo lectura se
+     convierten en un aviso claro. Todo lo demás pasa igual que siempre. */
+  function ajustarSup(r, url, metodo){
+    if (!supervisando()) return r;
+    var ruta = rutaSB(url);
+    if (!ruta) return r;
+    var esRpc = ruta.indexOf('/rest/v1/rpc/') === 0;
+    var fn = esRpc ? ruta.slice('/rest/v1/rpc/'.length) : '';
+    if (!r.ok){
+      return r.clone().text().then(function(t){
+        var sube = ruta.indexOf('/storage/v1/object') === 0 && !/\/object\/(list|sign|info)\//.test(ruta) &&
+                   String(metodo).toUpperCase() !== 'GET';
+        if (esRechazoSup(t) || sube){
+          avisoSup('👁️ Modo supervisión: no se guardó. Estás revisando, los datos no cambian.');
+          return respuesta({ message: 'Modo supervisión: no se guardó (estás revisando).',
+                             error: 'MODO_SUPERVISION', code: 'SUPERVISION' }, r.status);
+        }
+        return r;
+      }, function(){ return r; });
+    }
+    if (!esRpc) return r;
+    return r.clone().text().then(function(t){
+      var x = t.trim();
+      if (RPC_PUEDE.test(fn) && (x === 'false' || x === '')) return respuesta(true, 200);
+      if (x.charAt(0) === '{' && /"(puede|es_editor|editor)[a-z_]*"\s*:\s*false/i.test(x)){
+        try{
+          var o = JSON.parse(x), k, cambio = false;
+          for (k in o) if (/^(puede|es_editor|editor)/i.test(k) && o[k] === false){ o[k] = true; cambio = true; }
+          if (cambio) return respuesta(o, r.status);
+        }catch(e){}
+      }
+      return r;
+    }, function(){ return r; });
+  }
+
+  /* ---------- sin sesión: solo se anota en la consola, nunca se bloquea ---------- */
+  var anotado = false;
+  function sinSesion(){
+    if (anotado) return;
+    anotado = true;
+    try{ console.info('[lives-sesion v5.2] Sin sesión del portal LIVES: se usa la clave pública.'); }catch(e){}
+  }
+
+  window.fetch = function(entrada, init){
+    var url = (typeof entrada === 'string') ? entrada
+            : (entrada && entrada.url) ? entrada.url : String(entrada || '');
+    var metodo = (init && init.method) || (entrada && entrada.method) || 'GET';
+    if (supervisando() && url.indexOf(SB_URL) === 0 && url.indexOf(SB_URL + '/rest/v1/') !== 0){
+      return fetchBase(entrada, init).then(function(r){ return ajustarSup(r, url, metodo); });
+    }
+    if (typeof entrada !== 'string' || url.indexOf(SB_URL + '/rest/v1/') !== 0) return fetchBase(entrada, init);
+    return esperaPuente().then(function(){ return llave(false); }).then(function(tk){
+      if (!tk) sinSesion();
+      return fetchBase(url, conLlave(init, tk)).then(function(r){
+        if (r.status !== 401 || !tk) return ajustarSup(r, url, metodo);
+        /* 401 con llave: venció o la cerraron. Se renueva una vez y se reintenta. */
+        return llave(true).then(function(tk2){
+          if (!tk2){ sinSesion(); return r; }
+          return fetchBase(url, conLlave(init, tk2)).then(function(r2){
+            return ajustarSup(r2, url, metodo);
+          });
+        });
+      });
+    });
+  };
+
+  /* ---------- el nombre sale de la sesión, no de la dirección ---------- */
+  function fijarNombre(s){
+    if (!s || !s.nombre) return;
+    try{
+      var u = new URL(location.href);
+      if (u.searchParams.get('usuario') !== s.nombre){
+        u.searchParams.set('usuario', s.nombre);
+        u.searchParams.delete('nombre');
+        history.replaceState(history.state, '', u.toString());
+      }
+    }catch(e){}
+  }
+
+  /* ---------- v5 · puente con el portal de Sistemas ---------- */
+  var PUENTE_OK = 'lives_puente_recargado';
+  function norm(x){
+    return String(x || '').normalize('NFD').replace(/[\u0300-\u036f]/g, '').replace(/[+._-]/g, ' ')
+             .replace(/\s+/g, ' ').trim().toLowerCase();
+  }
+  function nombreLink(){
+    try{ var u = new URL(location.href); return (u.searchParams.get('usuario') || u.searchParams.get('nombre') || '').trim(); }
+    catch(e){ return ''; }
+  }
+  var pedido = nombreLink();
+  var sx = sesion();
+  /* Sesión del puente de otra persona (computadora compartida): se descarta. */
+  if (sx && sx.origen === 'sistemas' && pedido && norm(pedido) !== norm(sx.nombre)){ borrar(); sx = null; }
+  var puente = null;
+  function enPortalNuevo(){
+    if (window.top === window) return false;
+    var anc = '';
+    try{ var ao = location.ancestorOrigins; if (ao && ao.length) anc = ao[ao.length - 1]; }catch(e){}
+    var ref = ''; try{ ref = document.referrer || ''; }catch(e){}
+    return /^https:\/\/app\.lives\.com\.pe(\/|$)/.test(anc) || /^https:\/\/app\.lives\.com\.pe(\/|$)/.test(ref);
+  }
+  function esperaPuente(){ return puente || Promise.resolve(); }
+  if (!sx && pedido && norm(pedido).length >= 5){
+    var yaRecargo = null; try{ yaRecargo = sessionStorage.getItem(PUENTE_OK); }catch(e){}
+    if (yaRecargo !== norm(pedido)){
+      var raiz = document.documentElement, oculto = false;
+      try{ raiz.style.visibility = 'hidden'; oculto = true; }catch(e){}
+      var mostrar = function(){ if (oculto){ try{ raiz.style.visibility = ''; }catch(e){} oculto = false; } };
+      var tope = setTimeout(mostrar, 6000);                 /* nunca deja la pantalla en blanco */
+      puente = (function(){
+        var ctl = (typeof AbortController !== 'undefined') ? new AbortController() : null;
+        var reloj = setTimeout(function(){ if (ctl) ctl.abort(); }, 8000);
+        return fetchBase(SB_URL + '/functions/v1/sesion-sistemas', {
+          method: 'POST', headers: { 'Content-Type': 'application/json', apikey: SB_KEY },
+          body: JSON.stringify({ nombre: pedido, equipo: equipo(), desde: location.pathname, portal_nuevo: enPortalNuevo() }),
+          cache: 'no-store', signal: ctl ? ctl.signal : undefined
+        }).then(function(r){ clearTimeout(reloj); return r.json(); })
+          .then(function(j){
+            if (!j || !j.ok || !j.sesion || !j.sesion.sb){ sinSesion(); mostrar(); clearTimeout(tope); return; }
+            var d = j.sesion;
+            d.sb = { access: d.sb.access, refresh: d.sb.refresh, exp: Date.now() + (Number(d.sb.expira_en) || 3600) * 1000 };
+            d.vsesion = null;
+            guardar(d);
+            try{ sessionStorage.setItem(PUENTE_OK, norm(pedido)); }catch(e){}
+            location.reload();                               /* se vuelve a abrir ya con su sesión */
+          }, function(){ clearTimeout(reloj); sinSesion(); mostrar(); clearTimeout(tope); });
+      })();
+    }
+  }
+
+  /* ---------- al abrir ---------- */
+  var s0 = sesion();
+  if (!s0){
+    sinSesion();
+  } else {
+    fijarNombre(s0);
+    /* Si alguien ejecutó cerrar_todas_las_sesiones(), esta sesión ya no vale: se descarta
+       y la herramienta sigue abierta sin sesión. Sin señal no se hace nada. */
+    pedir('/rest/v1/rpc/version_sesion', {}, null, 8000).then(function(v){
+      if (!v.ok || typeof v.json !== 'number') return;
+      var s = sesion(); if (!s) return;
+      if (s.vsesion === undefined || (s.vsesion !== null && s.vsesion !== v.json)){ borrar(); sinSesion(); return; }
+      if (s.vsesion === null){ s.vsesion = v.json; guardar(s); }
+    }).catch(function(){});
+    /* v5.1: el nombre de la sesión se pone al día con el de la base (una recarga, una vez). */
+    llave(false).then(function(tk){
+      if (!tk) return;
+      return pedir('/rest/v1/rpc/mi_nombre', {}, tk, 8000).then(function(v){
+        if (!v.ok || typeof v.json !== 'string' || !v.json) return;
+        var s = sesion(); if (!s || v.json === s.nombre) return;
+        s.nombre = v.json; guardar(s); fijarNombre(s);
+        var ya = null; try{ ya = sessionStorage.getItem('lives_nombre_al_dia'); }catch(e){}
+        if (ya !== v.json){
+          try{ sessionStorage.setItem('lives_nombre_al_dia', v.json); }catch(e){}
+          location.reload();
+        }
+      });
+    }).catch(function(){});
+    /* Abierta fuera del portal: se anota igual que cuando se abre desde el portal. */
+    if (window.top === window && s0.sb){
+      document.addEventListener('DOMContentLoaded', function(){
+        llave(false).then(function(tk){
+          if (!tk) return;
+          return pedir('/rest/v1/rpc/registrar_apertura',
+            { p_herramienta: (document.title || location.pathname) + ' (suelta)',
+              p_url: location.origin + location.pathname, p_equipo: equipo() }, tk, 10000);
+        }).catch(function(){});
+      });
+    }
+  }
+
+  window.LIVES_SESION = {
+    version: 'lives-sesion v5.2 · 2026-10-06 (sin bloqueo · nombre al día · supervisión · puente Sistemas · portal nuevo)',
+    supervision: function(){ return supervisando(); },
+    actual: function(){ var s = sesion(); return s ? { usuario: s.usuario, nombre: s.nombre, conSupabase: !!s.sb } : null; },
+    llave: function(){ return llave(false); },
+    pedir: function(){ sinSesion(); }       /* se mantiene por compatibilidad: ya no bloquea */
+  };
+})();
+</script>
+<!-- ===== fin lives-sesion v5.2 ===== -->
+<style id="lsLimp2Css">/* lives-limpieza v2 · sin notas, veredictos ni paneles de título arriba */.verdict,#verdict{display:none!important}#ph{display:none!important}</style>
+<style id="lsSinActCss">/* 12/10/2026: sin botón Actualizar propio; se usa el actualizar del portal */#bAct{display:none!important}</style>
+<style id="taCss">
+:root{
+  --petrol:#0E3B36;--petrol-2:#12463F;--emer:#10B981;--sage:#0F7A5A;--sage-dark:#0B815E;--slate:#4E6B78;
+  --taupe:#B45309;--rose:#DC2626;--tan:#F59E0B;--warm:#DCE5E2;--warm-light:#F1F6F4;--stone:#5F726C;--card:#fff;
+  --sh:0 1px 3px rgba(14,59,54,.06),0 1px 2px rgba(14,59,54,.04);--sh-h:0 4px 12px rgba(14,59,54,.10);--r:12px;
+}
+*{box-sizing:border-box;}
+body{margin:0;background:var(--warm-light);color:#333;font-family:Calibri,Arial,sans-serif;font-size:14px;line-height:1.45;font-variant-numeric:tabular-nums;}
+.wrap{width:100%;max-width:none;margin:0 auto;padding:18px clamp(16px,2.2vw,52px) 44px;}
+.bar{display:flex;align-items:center;gap:10px;flex-wrap:wrap;background:var(--card);border-radius:var(--r);box-shadow:var(--sh);padding:10px 14px;margin-bottom:14px;position:sticky;top:0;z-index:15;}
+.seg{display:inline-flex;background:var(--warm-light);border-radius:8px;padding:3px;gap:2px;}
+.seg button{background:none;border:none;font-family:inherit;font-size:13px;font-weight:700;color:var(--stone);padding:6px 14px;border-radius:6px;cursor:pointer;}
+.seg button.active{background:var(--sage);color:#fff;box-shadow:var(--sh);}
+select,input[type=search]{font-family:inherit;font-size:13.5px;font-weight:700;color:var(--sage);border:1px solid var(--warm);border-radius:8px;padding:7px 12px;background:#fff;}
+input[type=search]{font-weight:400;color:#333;min-width:220px;}
+.btn{font-family:inherit;font-size:13px;font-weight:700;border-radius:8px;padding:8px 14px;cursor:pointer;border:1px solid var(--warm);background:#fff;color:var(--sage);}
+.btn:hover{border-color:var(--sage);}
+.btn.primary{background:var(--sage);color:#fff;border-color:var(--sage);}
+.btn.primary:hover{background:var(--sage-dark);}
+.btn.warn{color:var(--taupe);} .btn.warn:hover{border-color:var(--taupe);}
+.btn.danger{color:var(--rose);} .btn.danger:hover{border-color:var(--rose);}
+.btn:disabled{opacity:.5;cursor:not-allowed;}
+.spacer{margin-left:auto;}
+.grid{display:grid;grid-template-columns:repeat(12,1fr);gap:14px;margin-bottom:14px;}
+.col12{grid-column:span 12;}
+.panel{background:var(--card);border-radius:var(--r);box-shadow:var(--sh);padding:20px 18px 16px;position:relative;overflow:hidden;}
+.panel .tira{position:absolute;left:0;right:0;top:0;height:4px;background:var(--warm);}
+.panel .tira.resultado{background:var(--sage);} .panel .tira.volumen{background:var(--slate);}
+.panel .pt{font-size:15px;font-weight:700;}
+.panel .ph{font-size:11.5px;color:var(--stone);margin-top:2px;margin-bottom:12px;max-width:130ch;}
+table{width:100%;border-collapse:collapse;font-size:12.5px;}
+th{text-align:left;font-size:10.5px;text-transform:uppercase;letter-spacing:.5px;color:var(--stone);border-bottom:1px solid var(--warm);padding:8px 6px;white-space:nowrap;}
+td{padding:8px 6px;border-bottom:1px solid var(--warm-light);}
+td.n,th.n{text-align:right;}
+.tscroll{overflow-x:auto;}
+#tLista tbody tr{cursor:pointer;} #tLista tbody tr:hover td{background:var(--warm-light);}
+.st{font-size:11px;font-weight:700;padding:2px 9px;border-radius:20px;white-space:nowrap;display:inline-block;}
+.st.bue{background:#ECFDF5;color:var(--sage);} .st.ale{background:#FCEBEB;color:var(--rose);} .st.rev{background:#FEF3E2;color:var(--taupe);} .st.low{background:var(--warm-light);color:var(--stone);} .st.az{background:#EAF1FA;color:#2F6FB5;}
+.lsTope500{font-size:12px;color:#5F726C;text-align:center;padding:8px 0;}
+.vacio{color:var(--stone);font-size:13px;padding:10px 2px;}
+.err{display:none;background:#FBE9E9;border:1px solid var(--rose);border-radius:8px;padding:12px 16px;color:var(--rose);font-size:13px;margin-bottom:14px;}
+.err.on{display:block;}
+.perm{display:none;background:#FEF3E2;border:1px solid var(--tan);border-radius:var(--r);padding:16px 18px;color:#7A4A06;font-size:14px;margin-bottom:14px;}
+.perm.on{display:block;}
+/* tarjetas de clientes */
+.clis{display:grid;grid-template-columns:repeat(auto-fill,minmax(250px,1fr));gap:14px;}
+.cli{background:var(--card);border-radius:var(--r);box-shadow:var(--sh);padding:0;cursor:pointer;position:relative;overflow:hidden;text-align:left;border:none;font-family:inherit;color:inherit;display:flex;flex-direction:column;transition:box-shadow .15s,transform .15s;}
+.cli:hover{box-shadow:var(--sh-h);transform:translateY(-2px);}
+.cli:focus-visible{outline:3px solid var(--emer);outline-offset:2px;}
+.cli .banda{height:5px;background:var(--sage);display:block;}
+.cli.sin .banda{background:var(--warm);}
+.cli .cc{padding:16px 18px 16px;display:flex;flex-direction:column;flex:1;}
+.cli .nm{font-size:17px;font-weight:700;color:var(--petrol);line-height:1.2;}
+.cli .sg{font-size:11px;font-weight:700;letter-spacing:.6px;color:var(--stone);margin-top:2px;}
+.cli .mt{display:grid;grid-template-columns:1fr 1fr;gap:8px 12px;margin-top:14px;}
+.cli .mt .k{font-size:10.5px;text-transform:uppercase;letter-spacing:.4px;color:var(--stone);}
+.cli .mt .x{font-size:20px;font-weight:700;color:var(--sage);line-height:1.15;}
+.cli .mt .x.s{color:var(--slate);}
+.cli .ft{margin-top:auto;padding-top:12px;font-size:11.5px;color:var(--stone);display:flex;gap:8px;flex-wrap:wrap;}
+.chip{font-size:11px;font-weight:700;padding:2px 9px;border-radius:20px;background:var(--warm-light);color:var(--stone);}
+.chip.ok{background:#E7F4EF;color:var(--sage-dark);}
+/* ventana del formulario */
+.modal{position:fixed;inset:0;z-index:1000;background:rgba(14,59,54,.55);display:none;align-items:stretch;justify-content:center;padding:2vh 2vw;}
+.modal.on{display:flex;}
+.mcaja{background:var(--warm-light);border-radius:14px;box-shadow:0 20px 60px rgba(0,0,0,.35);width:100%;max-width:1500px;display:flex;flex-direction:column;overflow:hidden;}
+.mcab{display:flex;align-items:center;gap:12px;background:#fff;border-bottom:1px solid var(--warm);padding:12px 18px;}
+.mcab .mt{font-size:16px;font-weight:700;color:var(--petrol);}
+.mcab .ms{font-size:12px;color:var(--stone);}
+.mcuerpo{flex:1;overflow:auto;padding:16px clamp(12px,2vw,28px) 24px;}
+.mpie{display:flex;gap:10px;flex-wrap:wrap;align-items:center;background:#fff;border-top:1px solid var(--warm);padding:12px 18px;}
+.sec{background:#fff;border-radius:var(--r);box-shadow:var(--sh);padding:18px 18px 16px;margin-bottom:14px;position:relative;overflow:hidden;}
+.sec .tira{position:absolute;left:0;right:0;top:0;height:4px;background:var(--sage);}
+.sec .tira.v{background:var(--slate);} .sec .tira.t{background:var(--tan);}
+.sec .st2{font-size:15px;font-weight:700;margin-bottom:10px;}
+.campos{display:grid;grid-template-columns:repeat(auto-fill,minmax(210px,1fr));gap:12px 14px;}
+.campo label{display:block;font-size:11.5px;font-weight:700;color:var(--stone);letter-spacing:.3px;margin-bottom:4px;}
+.campo label b{color:var(--rose);}
+.campo input,.campo select,.campo textarea{width:100%;min-height:44px;font-family:inherit;font-size:14px;color:#333;border:1px solid var(--warm);border-radius:8px;padding:9px 11px;background:#fff;font-weight:400;}
+.campo textarea{min-height:70px;resize:vertical;}
+.campo input:focus,.campo select:focus,.campo textarea:focus,.hitos input:focus,.hitos select:focus{outline:2px solid var(--emer);border-color:var(--emer);}
+.campo.mal input,.campo.mal select{border-color:var(--rose);background:#FFF7F7;}
+.campo .em{display:none;font-size:12px;color:var(--rose);margin-top:3px;}
+.campo.mal .em{display:block;}
+.campo .ay{font-size:11.5px;color:var(--stone);margin-top:3px;}
+.c2{grid-column:span 2;}
+.tbar{display:flex;gap:10px;flex-wrap:wrap;align-items:flex-end;margin-bottom:12px;}
+.tbar .campo{min-width:260px;}
+.hitos{width:100%;border-collapse:separate;border-spacing:0;font-size:13px;}
+.hitos th{position:sticky;top:0;background:#fff;z-index:1;}
+.hitos{min-width:1380px;}
+.hitos td{padding:5px 4px;vertical-align:middle;}
+.hitos td.ord{white-space:nowrap;width:78px;}
+.hitos select[data-k=tipo]{min-width:124px;}
+.hitos input[data-k=nota]{min-width:150px;}
+.hitos input,.hitos select{width:100%;min-height:38px;font-family:inherit;font-size:13px;border:1px solid var(--warm);border-radius:7px;padding:6px 8px;background:#fff;color:#333;}
+.hitos input[type=date]{min-width:136px;}
+.hitos input.nm{min-width:190px;font-weight:700;}
+.hitos input.ne{min-width:170px;}
+.hitos input:disabled{background:var(--warm-light);color:#9AA9A4;}
+.hitos tr.secc td{background:var(--warm-light);font-size:11px;font-weight:700;letter-spacing:.6px;text-transform:uppercase;color:var(--petrol);padding:8px;}
+.hitos tr.mal input.fe{border-color:var(--rose);background:#FFF7F7;}
+.hitos .orig{font-size:11.5px;color:var(--stone);white-space:nowrap;}
+.hitos .orig b{color:var(--taupe);}
+.hitos .rng{font-size:10.5px;color:var(--stone);white-space:nowrap;}
+.ib{background:#fff;border:1px solid var(--warm);border-radius:7px;min-width:34px;min-height:34px;cursor:pointer;color:var(--stone);font-size:14px;font-family:inherit;}
+.ib:hover{border-color:var(--sage);color:var(--sage);}
+.ib.del:hover{border-color:var(--rose);color:var(--rose);}
+.chk{display:flex;align-items:center;justify-content:center;}
+.chk input{width:20px;height:20px;min-height:0;accent-color:var(--sage);}
+.aviso{font-size:12.5px;padding:9px 12px;border-radius:8px;background:#FEF3E2;color:#7A4A06;margin-bottom:12px;display:none;}
+.aviso.on{display:block;}
+.aviso.ok{background:#E7F4EF;color:var(--sage-dark);}
+.aviso.mal{background:#FBE9E9;color:var(--rose);}
+.pl{display:none;gap:10px;align-items:flex-end;flex-wrap:wrap;width:100%;padding-top:4px;}
+.pl.on{display:flex;}
+.pl .campo{min-width:280px;}
+.exito{display:none;text-align:center;padding:40px 20px;}
+.exito.on{display:block;}
+.exito .ok{font-size:44px;color:var(--sage);}
+.exito .tt{font-size:20px;font-weight:700;color:var(--petrol);margin-top:6px;}
+.exito .cd{font-size:15px;margin:8px 0 18px;color:#333;}
+.exito .cd b{color:var(--sage);font-size:18px;}
+.exito .bb{display:flex;gap:10px;justify-content:center;flex-wrap:wrap;}
+/* pregunta */
+.preg{position:fixed;inset:0;z-index:1100;background:rgba(14,59,54,.45);display:none;align-items:center;justify-content:center;padding:16px;}
+.preg.on{display:flex;}
+.preg .pc{background:#fff;border-radius:14px;box-shadow:0 20px 60px rgba(0,0,0,.35);max-width:440px;width:100%;padding:22px 22px 18px;}
+.preg .pt{font-size:16px;font-weight:700;color:var(--petrol);}
+.preg .px{font-size:13.5px;color:#333;margin:8px 0 16px;}
+.preg .pb{display:flex;gap:10px;justify-content:flex-end;flex-wrap:wrap;}
+@media(max-width:900px){.wrap{padding:14px 14px 36px;}.c2{grid-column:span 1;}}
+@media(max-width:760px){
+  .modal{padding:0;} .mcaja{border-radius:0;}
+  .hitos thead{display:none;}
+  .hitos,.hitos tbody{display:block;min-width:0;}
+  .hitos tr{display:grid;grid-template-columns:1fr 1fr;gap:6px 8px;padding:10px 0;border-bottom:1px solid var(--warm);}
+  .hitos tr.secc{display:block;padding:0;}
+  .hitos td{border:none;padding:0;}
+  .hitos td[data-l]::before{content:attr(data-l);display:block;font-size:10.5px;font-weight:700;color:var(--stone);text-transform:uppercase;letter-spacing:.4px;margin-bottom:2px;}
+  .hitos td.w2{grid-column:span 2;}
+  .hitos input.nm,.hitos input.ne{min-width:0;}
+}
+@media(max-width:600px){
+  body{font-size:13.5px;}
+  .bar{position:static;flex-wrap:wrap;padding:8px 10px;gap:8px;}
+  .bar>*{flex:none;} .bar>select{flex:1 1 140px;min-width:0;} .bar>.spacer{display:none;}
+  .btn,select,.seg button,input[type=search]{min-height:44px;font-size:14px;}
+  input[type=search]{min-width:180px;flex:1 1 180px;}
+  .clis,.campos{grid-template-columns:1fr!important;}
+  .cli:hover{transform:none;box-shadow:var(--sh);}
+  .panel{padding:18px 14px 14px;overflow-x:auto;}
+  #tLista{min-width:620px;}
+  .mpie .btn{flex:1 1 auto;min-height:44px;}
+}
+@media print{.bar,.modal,.preg{display:none!important;}}
+</style>
+</head>
+<body>
+<div class="wrap" id="app">
+  <div class="bar" id="barIni">
+    <input type="search" id="fBus" autocomplete="off" placeholder="Buscar cliente" aria-label="Buscar cliente">
+  </div>
+  <div class="bar" id="barCli" style="display:none">
+    <button type="button" class="btn" id="bVolver">‹ Clientes</button>
+    <select id="fCli" aria-label="Cliente"></select>
+    <div class="seg" id="fEst" role="group" aria-label="Estado">
+      <button type="button" data-e="En curso" class="active">En curso</button>
+      <button type="button" data-e="Borrador">Borrador</button>
+      <button type="button" data-e="Despachado">Despachados</button>
+      <button type="button" data-e="">Todos</button>
+    </div>
+    <input type="search" id="fTa" autocomplete="off" placeholder="Buscar código, estilo o tela" aria-label="Buscar Time & Action">
+    <span class="spacer"></span>
+    <button type="button" class="btn primary" id="bNuevo">+ Nuevo Time &amp; Action</button>
+  </div>
+  <div class="perm" id="perm"></div>
+  <div class="err" id="err"><span id="errTx"></span> <button type="button" class="btn" id="bReint">Reintentar</button></div>
+  <div id="vInicio"><div class="clis" id="clis"></div></div>
+  <div id="vCli" style="display:none">
+    <div class="grid">
+      <div class="panel col12"><span class="tira resultado"></span>
+        <div class="pt" id="lisT">Time &amp; Action</div>
+        <div class="ph">Toca una fila para abrirla, cambiar fechas o registrar las fechas reales. Avance = hitos con fecha real sobre el total de hitos del T&amp;A.</div>
+        <div id="lista"></div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- ventana del formulario -->
+<div class="modal" id="modal" role="dialog" aria-modal="true" aria-labelledby="mTit">
+  <div class="mcaja">
+    <div class="mcab">
+      <div><div class="mt" id="mTit">Nuevo Time &amp; Action</div><div class="ms" id="mSub"></div></div>
+      <span class="spacer"></span>
+      <button type="button" class="btn" id="bCerrar">✕ Cerrar</button>
+    </div>
+    <div class="mcuerpo" id="mCuerpo">
+      <div id="fForm">
+        <div class="aviso" id="avForm"></div>
+        <div class="sec"><span class="tira"></span>
+          <div class="st2">Datos del pedido</div>
+          <div class="campos">
+            <div class="campo" data-c="codigo"><label for="iCod">Código del pedido <b>*</b></label><input id="iCod" autocomplete="off" placeholder="Ej. ATI-001"><div class="em">Escribe el código del pedido (grupo).</div></div>
+            <div class="campo" data-c="temporada"><label for="iTem">Temporada / división</label><input id="iTem" autocomplete="off"></div>
+            <div class="campo" data-c="estilo"><label for="iEst">Estilo (nombre del cliente)</label><input id="iEst" autocomplete="off" placeholder="Ej. Royal Boxer Brief"></div>
+            <div class="campo" data-c="codigo_estilo"><label for="iCes">Código de estilo del cliente</label><input id="iCes" autocomplete="off"></div>
+            <div class="campo" data-c="estilo_lives"><label for="iEsl">Estilo LIVES (interno)</label><input id="iEsl" autocomplete="off"><div class="ay">No sale en la versión cliente.</div></div>
+            <div class="campo" data-c="cantidad"><label for="iCan">Cantidad (prendas) <b>*</b></label><input id="iCan" inputmode="numeric" autocomplete="off"><div class="em">Escribe un número entero, sin decimales.</div></div>
+            <div class="campo" data-c="colores"><label for="iCol">Colores</label><input id="iCol" autocomplete="off"></div>
+            <div class="campo" data-c="tela"><label for="iTel">Tela</label><input id="iTel" autocomplete="off"></div>
+            <div class="campo" data-c="fecha_confirmacion"><label for="iCon">Confirmación de la orden</label><input type="date" id="iCon"></div>
+            <div class="campo" data-c="exf"><label for="iExf">Ex-factory <b>*</b></label><input type="date" id="iExf"><div class="em">Falta el ex-factory: es la fecha desde la que se calculan los hitos.</div></div>
+            <div class="campo" data-c="estado"><label for="iEdo">Estado</label><select id="iEdo"><option>En curso</option><option>Borrador</option><option>Despachado</option><option>Anulado</option></select></div>
+            <div class="campo" data-c="exf_real"><label for="iExr">Ex-factory real</label><input type="date" id="iExr"></div>
+          </div>
+        </div>
+        <div class="sec"><span class="tira v"></span>
+          <div class="st2">Hitos</div>
+          <div class="tbar">
+            <div class="campo"><label for="iPla">Plantilla del cliente</label><select id="iPla"></select></div>
+            <button type="button" class="btn" id="bCalc">Calcular fechas desde el ex-factory</button>
+            <span class="spacer"></span>
+            <button type="button" class="btn" id="bAddPre">+ Hito de pre-producción</button>
+            <button type="button" class="btn" id="bAddPro">+ Etapa de producción</button>
+          </div>
+          <div class="aviso" id="avHit"></div>
+          <div class="tscroll"><table class="hitos" id="tHit"><thead><tr>
+            <th></th><th>Hito (inglés)</th><th>Hito (español)</th><th>Tipo</th><th>Plan inicio</th><th>Plan fin</th><th id="thOrig">Plan original</th><th>Real inicio</th><th>Real fin</th><th title="No sale en la versión cliente">Solo interno</th><th>Nota interna</th><th></th>
+          </tr></thead><tbody id="tbHit"></tbody></table></div>
+        </div>
+        <div class="sec"><span class="tira t"></span>
+          <div class="st2">Notas</div>
+          <div class="campos">
+            <div class="campo c2"><label for="iNot">Notas internas</label><textarea id="iNot"></textarea><div class="ay">Solo en la vista interna.</div></div>
+            <div class="campo c2"><label for="iNcl">Nota para el cliente</label><textarea id="iNcl"></textarea><div class="ay">Sale al pie del documento que se envía al cliente.</div></div>
+          </div>
+        </div>
+      </div>
+      <div class="exito" id="fOk">
+        <div class="ok">✓</div>
+        <div class="tt">Time &amp; Action guardado</div>
+        <div class="cd" id="okCod"></div>
+        <div class="bb">
+          <button type="button" class="btn primary" id="bSeguir">Seguir editando</button>
+          <button type="button" class="btn" id="bOtro">Registrar otro</button>
+          <button type="button" class="btn" id="bListo">Cerrar</button>
+        </div>
+      </div>
+    </div>
+    <div class="mpie" id="mPie">
+      <button type="button" class="btn primary" id="bGuardar">Guardar</button>
+      <button type="button" class="btn warn" id="bCong">Congelar plan original</button>
+      <button type="button" class="btn" id="bPla">Guardar como plantilla del cliente</button>
+      <span class="spacer"></span>
+      <button type="button" class="btn" id="bCancel">Cancelar</button>
+      <div class="pl" id="plCaja">
+        <div class="campo"><label for="iPlN">Nombre de la plantilla</label><input id="iPlN" autocomplete="off"></div>
+        <button type="button" class="btn primary" id="bPlOk">Guardar plantilla</button>
+        <button type="button" class="btn" id="bPlNo">Cancelar</button>
+      </div>
+    </div>
+  </div>
+</div>
+<div class="preg" id="preg" role="alertdialog" aria-modal="true"><div class="pc"><div class="pt" id="pgT"></div><div class="px" id="pgX"></div><div class="pb"><button type="button" class="btn" id="pgNo"></button><button type="button" class="btn primary" id="pgSi"></button></div></div></div>
+
+<script id="taJs">
+/* Time & Action · Llenado · v1 · 13/10/2026
+   Comercial crea y actualiza los T&A de cada cliente. Las fechas del plan se calculan hacia atrás desde el
+   ex-factory con la plantilla del cliente (días respecto del ex-factory) y se pueden corregir una por una.
+   Plan original = el que se congela al confirmar; después se mueve solo el plan vigente.
+   Puerta única: rpc ta_api(p_accion, p). */
+(function(){
+'use strict';
+var SB_URL = 'https://xxfufpddgoyhbotjmaiy.supabase.co', SB_KEY = 'sb_publishable_1g-n6UT70EUlNAo8Lyc04w_jKR4LpXZ';
+var ST = { clientes: [], sig: null, puede: false, pedidos: [], plantillas: [], est: 'En curso', P: null, sucio: false };
+var MS = 86400000, BORR = 'ta_borrador_v1';
+function $(id){ return document.getElementById(id); }
+function esc(s){ return String(s == null ? '' : s).replace(/[&<>"]/g, function(c){ return { '&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;' }[c]; }); }
+function n0(v){ return v == null || !isFinite(v) ? '—' : Math.round(v).toLocaleString('es-PE'); }
+function dmy(s){ if (!s) return '—'; var m = String(s).match(/^(\d{4})-(\d{2})-(\d{2})/); return m ? m[3] + '/' + m[2] + '/' + m[1] : s; }
+function d(s){ var m = String(s || '').match(/^(\d{4})-(\d{2})-(\d{2})/); return m ? new Date(+m[1], +m[2] - 1, +m[3]) : null; }
+function iso(x){ return x ? x.getFullYear() + '-' + ('0' + (x.getMonth() + 1)).slice(-2) + '-' + ('0' + x.getDate()).slice(-2) : ''; }
+function add(x, n){ return new Date(x.getFullYear(), x.getMonth(), x.getDate() + n); }
+function dias(a, b){ return Math.round((b - a) / MS); }
+function hoy(){ var x = new Date(); return new Date(x.getFullYear(), x.getMonth(), x.getDate()); }
+function api(accion, p){
+  return fetch(SB_URL + '/rest/v1/rpc/ta_api', { method: 'POST', headers: { 'Content-Type': 'application/json', apikey: SB_KEY },
+    body: JSON.stringify({ p_accion: accion, p: p || {} }) })
+  .then(function(r){ return r.text().then(function(t){ var j = null; try{ j = t ? JSON.parse(t) : null; }catch(e){}
+    if (!r.ok){ var m = (j && (j.message || j.error)) || ('Error ' + r.status); var e = new Error(String(m).replace(/^SIN_PERMISO:\s*/, '')); e.permiso = /SIN_PERMISO/.test(m); throw e; }
+    return j; }); });
+}
+function error(m){ $('errTx').textContent = m; $('err').classList.add('on'); }
+function sinError(){ $('err').classList.remove('on'); }
+function cli(sig){ return ST.clientes.filter(function(c){ return c.sigla === sig; })[0]; }
+function aviso(id, t, cls){ var a = $(id); a.className = 'aviso' + (t ? ' on' : '') + (cls ? ' ' + cls : ''); a.textContent = t || ''; }
+
+/* ---------- pregunta (en vez de confirm del navegador) ---------- */
+function pregunta(t, x, si, no){
+  return new Promise(function(res){
+    $('pgT').textContent = t; $('pgX').textContent = x; $('pgSi').textContent = si; $('pgNo').textContent = no || 'Cancelar';
+    $('preg').classList.add('on');
+    function fin(v){ $('preg').classList.remove('on'); $('pgSi').onclick = $('pgNo').onclick = null; res(v); }
+    $('pgSi').onclick = function(){ fin(true); }; $('pgNo').onclick = function(){ fin(false); };
+    setTimeout(function(){ $('pgSi').focus(); }, 30);
+  });
+}
+
+/* ---------- estado de un T&A (mismas reglas que la pantalla de consulta) ---------- */
+function resumen(p){
+  var H = (p.hitos || []), t = hoy(), tot = H.length, con = 0, venc = 0;
+  H.forEach(function(h){ if (h.fin_real) con++; else if (d(h.fin_plan) && d(h.fin_plan) < t) venc++; });
+  var e;
+  if (p.estado === 'Anulado') e = ['Anulado', 'low'];
+  else if (p.estado === 'Despachado') e = ['Despachado', 'bue'];
+  else if (p.estado === 'Borrador') e = ['Borrador', 'low'];
+  else if (venc) e = [venc + ' vencido' + (venc > 1 ? 's' : ''), 'ale'];
+  else e = ['Al día', 'bue'];
+  return { tot: tot, con: con, venc: venc, e: e };
+}
+
+/* ============================================================== inicio */
+function iniciar(){
+  api('permiso').then(function(p){
+    ST.puede = !!(p && p.puede_editar);
+    if (!p || !p.puede_ver){ sinPermiso('Tu usuario no tiene permiso para ver los Time & Action. Pide el acceso a Christian Talepcio.'); return; }
+    if (!ST.puede){ $('perm').textContent = 'Tu usuario solo puede consultar: no puede crear ni cambiar Time & Action. Pide el acceso a Christian Talepcio.'; $('perm').classList.add('on'); }
+    $('bNuevo').disabled = !ST.puede; if (!ST.puede) $('bNuevo').title = 'Solo para quien registra';
+    return api('clientes').then(function(r){
+      ST.clientes = r.clientes || [];
+      $('fCli').innerHTML = ST.clientes.map(function(c){ return '<option value="' + c.sigla + '">' + esc(c.nombre) + '</option>'; }).join('');
+      pintarInicio();
+      var h = decodeURIComponent((location.hash || '').slice(1)).toUpperCase();
+      if (h && cli(h)) abrir(h);
+    });
+  }).catch(function(e){
+    if (e.permiso){ sinPermiso('Tu usuario no tiene permiso para ver los Time & Action. Pide el acceso a Christian Talepcio.'); return; }
+    error('No se pudo cargar la lista de clientes: ' + e.message + '. Actualiza la pantalla desde el portal.');
+  });
+}
+function sinPermiso(t){ $('perm').textContent = t; $('perm').classList.add('on'); $('vInicio').style.display = 'none'; $('barIni').style.display = 'none'; }
+function pintarInicio(){
+  var q = ($('fBus').value || '').trim().toUpperCase();
+  var l = ST.clientes.filter(function(c){ return !q || c.nombre.indexOf(q) >= 0 || c.sigla.indexOf(q) >= 0; });
+  l.sort(function(a, b){ return (b.en_curso - a.en_curso) || (b.total - a.total) || (a.orden - b.orden); });
+  $('clis').innerHTML = l.length ? l.map(function(c){
+    return '<button type="button" class="cli' + (c.total ? '' : ' sin') + '" data-s="' + c.sigla + '"><span class="banda"></span><div class="cc">' +
+      '<div class="nm">' + esc(c.nombre) + '</div><div class="sg">' + c.sigla + '</div>' +
+      '<div class="mt"><div><div class="k">En curso</div><div class="x">' + n0(c.en_curso) + '</div></div>' +
+      '<div><div class="k">Total T&amp;A</div><div class="x s">' + n0(c.total) + '</div></div></div>' +
+      '<div class="ft">' + (c.proximo_exf ? '<span class="chip ok">Próximo ex-factory ' + dmy(c.proximo_exf) + '</span>' : '<span class="chip">Sin ex-factory próximo</span>') +
+      (c.plantillas ? '<span class="chip">Plantilla propia</span>' : '') + '</div></div></button>';
+  }).join('') : '<div class="vacio">Ningún cliente coincide con "' + esc(q) + '".</div>';
+}
+
+/* ============================================================== un cliente */
+function abrir(sig){
+  sinError(); ST.sig = sig; var c = cli(sig);
+  $('fCli').value = sig; $('vInicio').style.display = 'none'; $('vCli').style.display = '';
+  $('barIni').style.display = 'none'; $('barCli').style.display = '';
+  $('lisT').textContent = 'Time & Action de ' + c.nombre;
+  try{ history.replaceState(null, '', '#' + sig); }catch(e){}
+  ST.plantillas = [];
+  api('plantillas', { sigla: sig }).then(function(r){ if (ST.sig === sig) ST.plantillas = r.plantillas || []; }).catch(function(){});
+  cargarLista();
+}
+function volver(){
+  ST.sig = null; $('vCli').style.display = 'none'; $('vInicio').style.display = ''; $('barCli').style.display = 'none'; $('barIni').style.display = '';
+  try{ history.replaceState(null, '', location.pathname + location.search); }catch(e){}
+  api('clientes').then(function(r){ ST.clientes = r.clientes || ST.clientes; pintarInicio(); }).catch(function(){});
+}
+function cargarLista(){
+  var sig = ST.sig;
+  $('lista').innerHTML = '<div class="vacio">Cargando…</div>';
+  api('pedidos', { sigla: sig }).then(function(r){
+    if (ST.sig !== sig) return;
+    ST.pedidos = r.pedidos || []; pintarLista();
+  }).catch(function(e){ $('lista').innerHTML = '<div class="vacio">No se pudo leer la lista: ' + esc(e.message) + '</div>'; });
+}
+function pintarLista(){
+  var q = ($('fTa').value || '').trim().toUpperCase(), est = ST.est;
+  var L = ST.pedidos.filter(function(p){
+    if (est && p.estado !== est) return false;
+    if (!q) return true;
+    return [p.codigo, p.estilo, p.codigo_estilo, p.estilo_lives, p.tela, p.temporada].join(' ').toUpperCase().indexOf(q) >= 0;
+  });
+  if (!L.length){
+    $('lista').innerHTML = '<div class="vacio">' + (ST.pedidos.length ? 'Ningún Time & Action cumple el filtro. Cambia el estado o la búsqueda en la barra de arriba.' :
+      'Este cliente todavía no tiene Time & Action. ' + (ST.puede ? 'Créalo con "+ Nuevo Time & Action".' : '')) + '</div>';
+    return;
+  }
+  var tope = !q && !est ? 500 : Infinity, V = L.slice(0, tope);
+  var h = '<div class="tscroll"><table id="tLista"><thead><tr><th>Código</th><th>Estilo</th><th class="n">Cantidad</th><th>Ex-factory</th><th>Estado</th><th>Plan original</th><th class="n">Avance</th><th>Actualizado</th></tr></thead><tbody>';
+  V.forEach(function(p){
+    var r = resumen(p);
+    h += '<tr data-id="' + p.id + '"><td><b>' + esc(p.codigo) + '</b></td><td>' + esc(p.estilo || '—') + (p.codigo_estilo ? ' <span class="chip">' + esc(p.codigo_estilo) + '</span>' : '') + '</td>' +
+      '<td class="n">' + n0(p.cantidad) + '</td><td>' + dmy(p.exf) + '</td><td><span class="st ' + r.e[1] + '">' + r.e[0] + '</span></td>' +
+      '<td>' + (p.congelado_en ? '<span class="st az">Congelado' + (p.revision ? ' · rev. ' + p.revision : '') + '</span>' : '<span class="st low">Sin congelar</span>') + '</td>' +
+      '<td class="n">' + r.con + ' de ' + r.tot + '</td><td>' + dmy(String(p.actualizado_en).slice(0, 10)) + ' · ' + esc(p.actualizado_por || '') + '</td></tr>';
+  });
+  h += '</tbody></table></div>';
+  if (L.length > V.length) h += '<div class="lsTope500">Se muestran los 500 registros más recientes de ' + n0(L.length) + '. Usa los filtros para ver los demás.</div>';
+  $('lista').innerHTML = h;
+}
+
+/* ============================================================== formulario */
+var CAMPOS = { codigo: 'iCod', temporada: 'iTem', estilo: 'iEst', codigo_estilo: 'iCes', estilo_lives: 'iEsl', cantidad: 'iCan', colores: 'iCol', tela: 'iTel',
+  fecha_confirmacion: 'iCon', exf: 'iExf', estado: 'iEdo', exf_real: 'iExr', notas: 'iNot', nota_cliente: 'iNcl' };
+function plantillaDe(id){ return ST.plantillas.filter(function(p){ return String(p.id) === String(id); })[0]; }
+function pintarPlantillas(sel){
+  var L = ST.plantillas;
+  $('iPla').innerHTML = L.length ? L.map(function(p){ return '<option value="' + p.id + '">' + esc(p.nombre) + (p.sigla ? '' : ' · base') + '</option>'; }).join('') : '<option value="">Sin plantillas</option>';
+  if (sel && plantillaDe(sel)) $('iPla').value = sel;
+}
+function abrirForm(p, borrador){
+  ST.P = p ? JSON.parse(JSON.stringify(p)) : { id: null, sigla: ST.sig, estado: 'En curso', hitos: [] };
+  if (borrador) ST.P = borrador;
+  var c = cli(ST.sig);
+  $('mTit').textContent = ST.P.id ? 'Time & Action ' + (ST.P.codigo || '') : 'Nuevo Time & Action';
+  $('mSub').textContent = c ? c.nombre : '';
+  Object.keys(CAMPOS).forEach(function(k){ var v = ST.P[k]; $(CAMPOS[k]).value = v == null ? (k === 'estado' ? 'En curso' : '') : v; });
+  document.querySelectorAll('#fForm .campo').forEach(function(x){ x.classList.remove('mal'); });
+  var pre = ST.P.plantilla_id || ((ST.plantillas.filter(function(x){ return x.sigla; })[0] || ST.plantillas[0] || {}).id);
+  pintarPlantillas(pre);
+  aviso('avForm', borrador ? 'Se recuperó lo que no se había guardado.' : '', 'ok');
+  aviso('avHit', '');
+  pintarHitos();
+  $('fForm').style.display = ''; $('fOk').classList.remove('on'); $('mPie').style.display = '';
+  $('plCaja').classList.remove('on');
+  botonesForm();
+  ST.sucio = !!borrador;
+  $('modal').classList.add('on'); document.body.style.overflow = 'hidden';
+  $('mCuerpo').scrollTop = 0;
+  setTimeout(function(){ $('iCod').focus(); }, 40);
+}
+function botonesForm(){
+  var ro = !ST.puede;
+  $('bGuardar').disabled = ro; $('bPla').disabled = ro;
+  $('bCong').style.display = ST.P.id && !ST.P.congelado_en ? '' : 'none'; $('bCong').disabled = ro;
+  $('thOrig').style.display = ST.P.congelado_en ? '' : 'none';
+  if (ro) $('bGuardar').title = 'Solo para quien registra';
+}
+function cerrarForm(){ $('modal').classList.remove('on'); document.body.style.overflow = ''; ST.P = null; ST.sucio = false; borrarBorrador(); }
+function intentarCerrar(){
+  if (!ST.sucio || !ST.puede){ cerrarForm(); return; }
+  pregunta('¿Salir sin guardar?', 'Hay cambios que todavía no se guardaron. Si sales, se pierden.', 'Salir sin guardar', 'Seguir editando').then(function(si){ if (si) cerrarForm(); });
+}
+
+/* ---------- tabla de hitos ---------- */
+function filaHito(h, i){
+  var et = h.tipo === 'etapa', cong = !!ST.P.congelado_en, ro = ST.puede ? '' : ' disabled';
+  var orig = cong ? (et ? dmy(h.ini_orig) + ' → ' + dmy(h.fin_orig) : dmy(h.fin_orig)) : '';
+  var mov = cong && h.fin_orig && h.fin_plan && h.fin_orig !== h.fin_plan ? ' <b>(' + (dias(d(h.fin_orig), d(h.fin_plan)) > 0 ? '+' : '') + dias(d(h.fin_orig), d(h.fin_plan)) + ' d)</b>' : '';
+  return '<tr data-i="' + i + '">' +
+    '<td class="w2 ord" data-l="Orden"><button type="button" class="ib" data-a="up" title="Subir"' + ro + '>↑</button> <button type="button" class="ib" data-a="dn" title="Bajar"' + ro + '>↓</button></td>' +
+    '<td class="w2" data-l="Hito (inglés)"><input class="nm" data-k="nombre" value="' + esc(h.nombre) + '"' + ro + '></td>' +
+    '<td class="w2" data-l="Hito (español)"><input class="ne" data-k="nombre_es" value="' + esc(h.nombre_es || '') + '"' + ro + '></td>' +
+    '<td data-l="Tipo"><select data-k="tipo"' + ro + '><option value="hito"' + (et ? '' : ' selected') + '>Una fecha</option><option value="etapa"' + (et ? ' selected' : '') + '>Inicio y fin</option></select></td>' +
+    '<td data-l="Plan inicio"><input type="date" class="fe" data-k="ini_plan" value="' + (h.ini_plan || '') + '"' + (et ? ro : ' disabled') + '></td>' +
+    '<td data-l="Plan fin"><input type="date" class="fe" data-k="fin_plan" value="' + (h.fin_plan || '') + '"' + ro + '>' + (h._rng ? '<div class="rng">' + h._rng + '</div>' : '') + '</td>' +
+    (cong ? '<td data-l="Plan original"><span class="orig">' + orig + mov + '</span></td>' : '') +
+    '<td data-l="Real inicio"><input type="date" data-k="ini_real" value="' + (h.ini_real || '') + '"' + (et ? ro : ' disabled') + '></td>' +
+    '<td data-l="Real fin"><input type="date" data-k="fin_real" value="' + (h.fin_real || '') + '"' + ro + '></td>' +
+    '<td data-l="Solo interno" class="chk"><input type="checkbox" data-k="solo_interno"' + (h.solo_interno ? ' checked' : '') + ro + '></td>' +
+    '<td class="w2" data-l="Nota interna"><input data-k="nota" value="' + esc(h.nota || '') + '"' + ro + '></td>' +
+    '<td data-l=""><button type="button" class="ib del" data-a="del" title="Quitar"' + ro + '>🗑</button></td></tr>';
+}
+function pintarHitos(){
+  var H = ST.P.hitos || [], cols = ST.P.congelado_en ? 12 : 11, h = '';
+  [['pre', 'Fechas de pre-producción'], ['proc', 'Proceso de producción']].forEach(function(s){
+    h += '<tr class="secc"><td colspan="' + cols + '">' + s[1] + '</td></tr>';
+    var n = 0;
+    H.forEach(function(x, i){ if (x.seccion === s[0]){ h += filaHito(x, i); n++; } });
+    if (!n) h += '<tr><td colspan="' + cols + '" class="vacio">Sin hitos en esta sección.</td></tr>';
+  });
+  $('tbHit').innerHTML = h;
+  validarFechas();
+}
+function leerFila(tr){
+  var i = +tr.dataset.i, x = ST.P.hitos[i];
+  tr.querySelectorAll('[data-k]').forEach(function(el){ x[el.dataset.k] = el.type === 'checkbox' ? el.checked : el.value; });
+  if (x.tipo === 'hito'){ x.ini_plan = ''; x.ini_real = ''; }
+  return x;
+}
+function validarFechas(){
+  var mal = 0;
+  document.querySelectorAll('#tbHit tr[data-i]').forEach(function(tr){
+    var x = ST.P.hitos[+tr.dataset.i], m = x.tipo === 'etapa' && x.ini_plan && x.fin_plan && x.ini_plan > x.fin_plan;
+    tr.classList.toggle('mal', !!m); if (m) mal++;
+  });
+  return mal;
+}
+function calcular(){
+  var pl = plantillaDe($('iPla').value), exf = d($('iExf').value);
+  if (!pl){ aviso('avHit', 'Este cliente no tiene plantilla. Agrega los hitos a mano y guárdalos como plantilla del cliente.', ''); return; }
+  if (!exf){ marcar('exf', true); aviso('avHit', 'Primero pon el ex-factory: las fechas se calculan hacia atrás desde ahí.', 'mal'); $('iExf').focus(); return; }
+  var prev = {};
+  (ST.P.hitos || []).forEach(function(h){ prev[h.seccion + '|' + String(h.nombre).toUpperCase() + '|' + h.tipo] = h; });
+  ST.P.hitos = pl.hitos.filter(function(t){ return t.activo; }).map(function(t){
+    var k = t.seccion + '|' + t.nombre + '|' + t.tipo, o = prev[k] || {};
+    var rng = t.r_fin_min != null && t.r_fin_min !== t.r_fin_max ? 'rango visto ' + t.r_fin_min + ' a ' + t.r_fin_max + ' d' : '';
+    return { id: o.id || null, seccion: t.seccion, nombre: t.nombre, nombre_es: o.nombre_es || t.nombre_es, tipo: t.tipo,
+      ini_plan: t.tipo === 'etapa' && t.off_ini != null ? iso(add(exf, t.off_ini)) : '', fin_plan: iso(add(exf, t.off_fin)),
+      ini_orig: o.ini_orig, fin_orig: o.fin_orig, ini_real: o.ini_real || '', fin_real: o.fin_real || '',
+      solo_interno: o.id ? !!o.solo_interno : !!t.solo_interno, nota: o.nota || '', _rng: rng };
+  });
+  ST.P.plantilla_id = pl.id; ST.sucio = true;
+  pintarHitos();
+  var off = pl.hitos.filter(function(t){ return !t.activo; }).map(function(t){ return t.nombre; });
+  aviso('avHit', 'Fechas calculadas con "' + pl.nombre + '": días respecto del ex-factory, tomados de T&A anteriores (no son leadtimes oficiales de PCP). Las fechas reales ya puestas se conservan.' +
+    (off.length ? ' Vienen apagados: ' + off.join(', ') + '; agrégalos con los botones si este pedido los lleva.' : ''), 'ok');
+}
+function intentarCalcular(){
+  var conFechas = (ST.P.hitos || []).some(function(h){ return h.fin_plan; });
+  if (!conFechas){ calcular(); return; }
+  pregunta('¿Volver a calcular las fechas?', 'Las fechas del plan se reemplazan por las de la plantilla. Las fechas reales y las notas se conservan.', 'Calcular', 'Cancelar').then(function(si){ if (si) calcular(); });
+}
+function agregar(sec){
+  leerTodo();
+  var x = { id: null, seccion: sec, nombre: '', nombre_es: '', tipo: sec === 'pre' ? 'hito' : 'etapa', ini_plan: '', fin_plan: '', ini_real: '', fin_real: '', solo_interno: false, nota: '' };
+  var H = ST.P.hitos, pos = H.length;
+  if (sec === 'pre'){ pos = 0; H.forEach(function(h, i){ if (h.seccion === 'pre') pos = i + 1; }); }
+  H.splice(pos, 0, x); ST.sucio = true; pintarHitos();
+  var tr = document.querySelector('#tbHit tr[data-i="' + pos + '"] input.nm'); if (tr) tr.focus();
+}
+function leerTodo(){ document.querySelectorAll('#tbHit tr[data-i]').forEach(leerFila); }
+function marcar(k, mal){ var c = document.querySelector('#fForm .campo[data-c="' + k + '"]'); if (c) c.classList.toggle('mal', !!mal); }
+function leerCab(){ Object.keys(CAMPOS).forEach(function(k){ ST.P[k] = $(CAMPOS[k]).value; }); ST.P.plantilla_id = $('iPla').value || ST.P.plantilla_id || null; }
+function validar(){
+  leerCab(); leerTodo();
+  var ok = true;
+  marcar('codigo', !ST.P.codigo.trim()); if (!ST.P.codigo.trim()) ok = false;
+  marcar('exf', !ST.P.exf); if (!ST.P.exf) ok = false;
+  var c = String(ST.P.cantidad).trim(), cm = c === '' || !/^\d+$/.test(c.replace(/[,\s]/g, ''));
+  marcar('cantidad', cm); if (cm) ok = false; else ST.P.cantidad = c.replace(/[,\s]/g, '');
+  var sinNom = ST.P.hitos.filter(function(h){ return !String(h.nombre).trim(); }).length;
+  var malF = validarFechas();
+  if (!ok){ aviso('avForm', 'Revisa los campos marcados.', 'mal'); $('mCuerpo').scrollTop = 0; return false; }
+  if (sinNom){ aviso('avHit', 'Hay ' + sinNom + ' hito(s) sin nombre: escríbelo o quítalo con 🗑.', 'mal'); return false; }
+  if (malF){ aviso('avHit', 'Hay ' + malF + ' etapa(s) con inicio después del fin (marcadas en rojo).', 'mal'); return false; }
+  if (!ST.P.hitos.length){ aviso('avHit', 'El Time & Action no tiene hitos: calcúlalos con la plantilla o agrégalos.', 'mal'); return false; }
+  aviso('avForm', '');
+  return true;
+}
+function cuerpo(){
+  var P = ST.P, cab = { id: P.id, sigla: ST.sig };
+  Object.keys(CAMPOS).forEach(function(k){ cab[k] = P[k]; }); cab.plantilla_id = P.plantilla_id;
+  return { pedido: cab, hitos: P.hitos.map(function(h){ return { id: h.id, seccion: h.seccion, nombre: h.nombre, nombre_es: h.nombre_es, tipo: h.tipo,
+    ini_plan: h.tipo === 'etapa' ? h.ini_plan : '', fin_plan: h.fin_plan, ini_real: h.tipo === 'etapa' ? h.ini_real : '', fin_real: h.fin_real, solo_interno: !!h.solo_interno, nota: h.nota }; }) };
+}
+function guardar(){
+  if (!ST.puede || !validar()) return;
+  var b = $('bGuardar'); b.disabled = true; b.textContent = 'Guardando…';
+  api('guardar', cuerpo()).then(function(r){
+    return api('pedido', { id: r.id }).then(function(x){
+      ST.P = x.pedido; ST.sucio = false; borrarBorrador();
+      $('okCod').innerHTML = 'Código <b>' + esc(ST.P.codigo) + '</b> · ' + (ST.P.hitos || []).length + ' hitos · ex-factory ' + dmy(ST.P.exf) +
+        (ST.P.congelado_en ? '<br>Plan original congelado · revisión ' + ST.P.revision : '<br>El plan original todavía no está congelado: congélalo cuando el cliente confirme.');
+      $('fForm').style.display = 'none'; $('mPie').style.display = 'none'; $('fOk').classList.add('on');
+      cargarLista();
+    });
+  }).catch(function(e){
+    aviso('avForm', 'No se guardó: ' + e.message + '. Lo que escribiste sigue aquí; corrige y vuelve a guardar.', 'mal'); $('mCuerpo').scrollTop = 0;
+  }).then(function(){ b.disabled = !ST.puede; b.textContent = 'Guardar'; });
+}
+function congelar(){
+  if (!ST.P || !ST.P.id) return;
+  var seguir = function(){
+    pregunta('¿Congelar el plan original?', 'Las fechas de hoy quedan como plan original y ya no cambian. Después solo se mueve el plan vigente y cada cambio sube la revisión. Sirve para mostrar al cliente quién movió qué.', 'Congelar', 'Cancelar').then(function(si){
+      if (!si) return;
+      api('congelar', { id: ST.P.id }).then(function(){ return api('pedido', { id: ST.P.id }); }).then(function(x){
+        ST.P = x.pedido; pintarHitos(); botonesForm(); aviso('avForm', 'Plan original congelado.', 'ok'); cargarLista();
+      }).catch(function(e){ aviso('avForm', 'No se congeló: ' + e.message, 'mal'); });
+    });
+  };
+  if (ST.sucio){ aviso('avForm', 'Primero guarda los cambios; después congela el plan.', 'mal'); $('mCuerpo').scrollTop = 0; return; }
+  seguir();
+}
+function abrirPlantilla(){
+  var c = cli(ST.sig);
+  $('iPlN').value = (plantillaDe($('iPla').value) || {}).sigla === ST.sig ? plantillaDe($('iPla').value).nombre : (c.nombre + ' · formato propio');
+  $('plCaja').classList.add('on'); $('iPlN').focus();
+}
+function guardarPlantilla(){
+  leerCab(); leerTodo();
+  var exf = d(ST.P.exf);
+  if (!exf){ marcar('exf', true); aviso('avForm', 'Para guardar como plantilla hace falta el ex-factory: los días se miden desde ahí.', 'mal'); $('mCuerpo').scrollTop = 0; return; }
+  var H = ST.P.hitos.filter(function(h){ return String(h.nombre).trim() && h.fin_plan; });
+  if (!H.length){ aviso('avHit', 'No hay hitos con fecha de plan para guardar como plantilla.', 'mal'); return; }
+  var nom = $('iPlN').value.trim(); if (!nom){ $('iPlN').focus(); return; }
+  api('guardar_plantilla', { sigla: ST.sig, nombre: nom, hitos: H.map(function(h){ return { seccion: h.seccion, nombre: h.nombre, nombre_es: h.nombre_es, tipo: h.tipo,
+    off_ini: h.tipo === 'etapa' && h.ini_plan ? dias(exf, d(h.ini_plan)) : '', off_fin: dias(exf, d(h.fin_plan)), activo: true, solo_interno: !!h.solo_interno }; }) })
+  .then(function(r){ $('plCaja').classList.remove('on'); aviso('avHit', 'Plantilla "' + nom + '" guardada para ' + cli(ST.sig).nombre + ': los próximos T&A de este cliente pueden calcularse con ella.', 'ok');
+    return api('plantillas', { sigla: ST.sig }).then(function(x){ ST.plantillas = x.plantillas || []; pintarPlantillas(r.id); }); })
+  .catch(function(e){ aviso('avHit', 'No se guardó la plantilla: ' + e.message, 'mal'); });
+}
+
+/* ---------- borrador (no se pierde lo escrito) ---------- */
+function guardarBorradorAhora(){
+  if (!ST.P || !ST.sucio || !$('modal').classList.contains('on')) return;
+  try{ leerCab(); leerTodo(); localStorage.setItem(BORR, JSON.stringify({ sig: ST.sig, P: ST.P, ts: Date.now() })); }catch(e){}
+}
+function leerBorrador(sig, id){
+  try{ var b = JSON.parse(localStorage.getItem(BORR) || 'null'); if (b && b.sig === sig && String(b.P.id || '') === String(id || '') && Date.now() - b.ts < 7 * MS) return b.P; }catch(e){}
+  return null;
+}
+function borrarBorrador(){ try{ localStorage.removeItem(BORR); }catch(e){} }
+window.guardarBorradorAhora = guardarBorradorAhora;
+setInterval(guardarBorradorAhora, 20000);
+window.addEventListener('pagehide', guardarBorradorAhora);
+
+/* ============================================================== eventos */
+$('fBus').addEventListener('input', pintarInicio);
+$('clis').addEventListener('click', function(e){ var b = e.target.closest('.cli'); if (b) abrir(b.dataset.s); });
+$('bVolver').addEventListener('click', volver);
+$('fCli').addEventListener('change', function(){ abrir(this.value); });
+$('fEst').addEventListener('click', function(e){ var b = e.target.closest('button'); if (!b) return;
+  [].forEach.call(this.children, function(x){ x.classList.toggle('active', x === b); }); ST.est = b.dataset.e; pintarLista(); });
+$('fTa').addEventListener('input', pintarLista);
+$('lista').addEventListener('click', function(e){
+  var tr = e.target.closest('tr[data-id]'); if (!tr) return;
+  var id = tr.dataset.id;
+  api('pedido', { id: id }).then(function(x){ abrirForm(x.pedido, leerBorrador(ST.sig, id)); }).catch(function(e){ error('No se pudo abrir: ' + e.message); });
+});
+$('bNuevo').addEventListener('click', function(){ if (ST.puede) abrirForm(null, leerBorrador(ST.sig, null)); });
+$('bCerrar').addEventListener('click', intentarCerrar);
+$('bCancel').addEventListener('click', intentarCerrar);
+$('modal').addEventListener('keydown', function(e){ if (e.key === 'Escape' && !$('preg').classList.contains('on')) intentarCerrar(); });
+$('fForm').addEventListener('input', function(e){
+  ST.sucio = true;
+  var c = e.target.closest('.campo'); if (c) c.classList.remove('mal');
+  var tr = e.target.closest('tr[data-i]'); if (tr){ leerFila(tr); validarFechas(); }
+});
+$('fForm').addEventListener('change', function(e){
+  var tr = e.target.closest('tr[data-i]');
+  if (tr && e.target.dataset.k === 'tipo'){ leerFila(tr); pintarHitos(); }
+  if (e.target.id === 'iExf' && ST.P && !(ST.P.hitos || []).some(function(h){ return h.fin_plan; })) calcular();
+});
+$('tbHit').addEventListener('click', function(e){
+  var b = e.target.closest('button[data-a]'); if (!b || !ST.puede) return;
+  leerTodo();
+  var i = +b.closest('tr').dataset.i, H = ST.P.hitos, a = b.dataset.a;
+  if (a === 'del'){ H.splice(i, 1); }
+  else {
+    var j = i + (a === 'up' ? -1 : 1);
+    while (j >= 0 && j < H.length && H[j].seccion !== H[i].seccion) j += (a === 'up' ? -1 : 1);
+    if (j < 0 || j >= H.length) return;
+    var t = H[i]; H[i] = H[j]; H[j] = t;
+  }
+  ST.sucio = true; pintarHitos();
+});
+$('bCalc').addEventListener('click', function(){ leerTodo(); intentarCalcular(); });
+$('bAddPre').addEventListener('click', function(){ agregar('pre'); });
+$('bAddPro').addEventListener('click', function(){ agregar('proc'); });
+$('bGuardar').addEventListener('click', guardar);
+$('bCong').addEventListener('click', congelar);
+$('bPla').addEventListener('click', abrirPlantilla);
+$('bPlNo').addEventListener('click', function(){ $('plCaja').classList.remove('on'); });
+$('bPlOk').addEventListener('click', guardarPlantilla);
+$('bSeguir').addEventListener('click', function(){ abrirForm(ST.P); });
+$('bOtro').addEventListener('click', function(){ abrirForm(null); });
+$('bListo').addEventListener('click', cerrarForm);
+$('bReint').addEventListener('click', function(){ sinError(); if (ST.sig) abrir(ST.sig); else iniciar(); });
+
+/* para pruebas y para el bloque de Excel */
+window.TA_LLENADO = { estado: function(){ return ST; } };
+iniciar();
+})();
+</script>
+
+<!-- ===== lives-actualizar v2 · 2026-10-12 · aviso de versión nueva OBLIGATORIO (común a todas las herramientas).
+     Revisa cada 3 minutos (y al volver a la pestaña) si el archivo publicado cambió. Si cambió, tapa la
+     herramienta con un aviso que no se puede cerrar: un solo botón, "Actualizar". En celular ocupa toda la
+     pantalla; en computadora sale al centro. No aparece mientras la persona está escribiendo (espera a que
+     pase 20 s sin teclear) y, antes de recargar, pide a la herramienta que guarde su borrador si tiene uno.
+     Solo pide el encabezado del archivo (HEAD), no lo descarga. ===== -->
+<style id="lsActCss">
+#lsAct{position:fixed;inset:0;z-index:2147483000;display:none;align-items:center;justify-content:center;
+  background:rgba(14,59,54,.78);padding:16px;font-family:Calibri,Arial,sans-serif}
+#lsAct .lsActCaja{background:#fff;border-radius:12px;border-top:4px solid #10B981;box-shadow:0 10px 30px rgba(0,0,0,.25);
+  max-width:440px;width:100%;padding:26px 24px 22px;text-align:center;color:#1a1a1a}
+#lsAct .lsActIco{width:56px;height:56px;margin:0 auto 12px;border-radius:50%;background:#E7F6EF;color:#0F7A5A;
+  display:flex;align-items:center;justify-content:center;font-size:30px;line-height:1}
+#lsAct h2{margin:0 0 8px;font-size:21px;color:#0E3B36}
+#lsAct p{margin:0 0 18px;font-size:15.5px;line-height:1.45;color:#3d4f4b}
+#lsActSi{display:block;width:100%;background:#0F7A5A;color:#fff;border:none;border-radius:10px;font-family:inherit;
+  font-size:17px;font-weight:700;padding:14px 16px;min-height:52px;cursor:pointer}
+#lsActSi:hover{background:#0B6349}
+#lsActSi:focus{outline:3px solid #10B981;outline-offset:2px}
+@media (max-width:640px){
+  #lsAct{padding:0;background:#fff}
+  #lsAct .lsActCaja{max-width:none;height:100%;border-radius:0;box-shadow:none;border-top:6px solid #10B981;
+    display:flex;flex-direction:column;justify-content:center;padding:32px 22px}
+  #lsAct h2{font-size:24px}
+  #lsAct p{font-size:17px}
+  #lsActSi{font-size:19px;min-height:58px}
+}
+@media print{#lsAct{display:none!important}}
+</style>
+<script id="lsActJs">(function(){
+  'use strict';
+  if (window.__lsAct) return; window.__lsAct = true;
+  if (!/^https?:$/.test(location.protocol)) return;
+  var url = location.origin + location.pathname, base = null, pendiente = false, ultimaTecla = 0;
+  /* Mientras la persona escribe no se interrumpe: se espera a que pasen 20 s sin teclear. */
+  ['input','keydown','change'].forEach(function(ev){
+    document.addEventListener(ev, function(e){ if (!e.target || !e.target.closest || !e.target.closest('#lsAct')) ultimaTecla = Date.now(); }, true);
+  });
+  function firma(){
+    return fetch(url, { method: 'HEAD', cache: 'no-store' }).then(function(r){
+      if (!r.ok) return null;
+      return r.headers.get('etag') || r.headers.get('last-modified') || null;
+    }, function(){ return null; });
+  }
+  function recargar(){
+    /* Si la herramienta guarda borrador (p. ej. el formulario de auditoría), se guarda antes de recargar. */
+    if (ultimaTecla){
+      ['guardarBorradorAhora','guardarBorradorPeriodico','guardarBorrador'].some(function(n){
+        try { if (typeof window[n] === 'function'){ window[n](); return true; } } catch(e){}
+        return false;
+      });
+    }
+    setTimeout(function(){ location.reload(); }, 150);
+  }
+  function aviso(){
+    if (document.getElementById('lsAct') && document.getElementById('lsAct').style.display === 'flex') return;
+    if (Date.now() - ultimaTecla < 20000){ setTimeout(aviso, 5000); return; }
+    var d = document.getElementById('lsAct');
+    if (!d){
+      d = document.createElement('div'); d.id = 'lsAct';
+      d.setAttribute('role', 'alertdialog'); d.setAttribute('aria-modal', 'true'); d.setAttribute('aria-labelledby', 'lsActT');
+      d.innerHTML = '<div class="lsActCaja"><div class="lsActIco" aria-hidden="true">&#8635;</div>' +
+        '<h2 id="lsActT">Hay una versión nueva</h2>' +
+        '<p>Esta herramienta se actualizó. Toca <b>Actualizar</b> para seguir trabajando con la versión nueva.</p>' +
+        '<button id="lsActSi" type="button">Actualizar</button></div>';
+      (document.body || document.documentElement).appendChild(d);
+      document.getElementById('lsActSi').onclick = recargar;
+    }
+    d.style.display = 'flex';
+    document.documentElement.style.overflow = 'hidden';
+    var b = document.getElementById('lsActSi'); if (b) b.focus();
+  }
+  /* No se puede cerrar: Escape no hace nada, el foco no sale del aviso y si algo lo quita vuelve a salir. */
+  document.addEventListener('keydown', function(e){
+    var d = document.getElementById('lsAct'); if (!d || d.style.display !== 'flex') return;
+    if (e.key === 'Escape'){ e.preventDefault(); e.stopPropagation(); }
+    if (e.key === 'Tab'){ e.preventDefault(); var b = document.getElementById('lsActSi'); if (b) b.focus(); }
+  }, true);
+  setInterval(function(){
+    if (!pendiente) return;
+    var d = document.getElementById('lsAct');
+    if (!d || d.style.display !== 'flex') aviso();
+  }, 1500);
+  function revisar(){
+    if (document.hidden || pendiente) return;
+    firma().then(function(f){
+      if (!f) return;
+      if (base === null){ base = f; return; }
+      if (f !== base){ pendiente = true; aviso(); }
+    });
+  }
+  revisar();
+  setInterval(revisar, 3 * 60000);
+  document.addEventListener('visibilitychange', function(){ if (!document.hidden) revisar(); });
+})();</script>
+<!-- ===== fin lives-actualizar v2 ===== -->
+<!-- ===== lives-franja v6.1 · 2026-10-09 · sin franja de estado arriba y sin la palabra "Supabase" (común a todas las herramientas).
+     1) La tira de estado de arriba ("Datos al…", "En vivo…", nombre del usuario, fechas) y el aviso "Datos en vivo" NO se ven:
+        el contenido empieza arriba del todo. Si la tira trae botones o enlaces (Volver, Atrás, Cambiar, navegación),
+        solo quedan esos, en una línea delgada.
+     2) Al terminar de cargar sale un aviso flotante "Actualizado · hh:mm" que desaparece solo (no ocupa espacio).
+        Si la carga falla, sale un aviso rojo flotante con el motivo. Si el usuario solo puede consultar y la pantalla
+        no lo dice en otro lado, sale un aviso flotante de solo consulta.
+     3) En lo que se ve en pantalla no aparece el nombre del proveedor de la base: "· Supabase" y "fuente: Supabase" se quitan,
+        y en los textos de ayuda "Supabase" se lee "la base de datos". El código, los guardados y los datos no cambian.
+     4) v4 · Si la herramienta se abre dentro del portal LIVES antiguo y ese portal todavía es la versión vieja (sin el aviso
+        de mudanza, bloque lsMudJs), se recarga el portal completo para que la persona vea el aviso de mudanza.
+        Solo pasa al abrir la herramienta (todavía sin nada escrito), como máximo una vez cada 10 minutos;
+        en el portal nuevo de Sistemas no hace nada.
+     5) v5 · Botones de exportar, imprimir, actualizar, Excel o HTML que flotaban encima de la barra de filtros pasan a esa
+        barra (si no hay barra, se crea una). La barra con filtros queda fija al bajar y, mientras está fija, los botones de
+        acción se esconden; al subir vuelven. Las barras que solo tienen botones suben con la página.
+        El dato "N registros · datos al …" ya no se muestra. Acabados no se toca.
+     6) v6 · Los demás grupos de botones que flotaban arriba (pestañas como "Mejoras / Reporte", menús de vista,
+        "Volver") también entran a la barra de filtros; si no hay barra, se les crea una. Al cambiar de pestaña, las
+        pestañas pasan a la barra de la vista abierta. Lo que ya está dentro de una tarjeta no se mueve. Una barra de
+        filtros muy alta (más de 180 px) no se queda fija, para no tapar media pantalla. ===== -->
+<style id="lsFrCss">
+@media screen{
+.lsSinBarra{padding:2px 12px 0!important;gap:2px 8px!important;font-size:12px!important;line-height:1.25!important;min-height:0!important}
+.lsSinBarra.lsFrVacia,.lsSinBarra .lsFrOc,.lsSinBarra .lsFrTx{display:none!important}
+.lsSinBarra a,.lsSinBarra button,.lsSinBarra>* a,.lsSinBarra>* button{padding:1px 8px!important;font-size:12px!important;line-height:1.25!important;border-width:1px!important;border-radius:6px!important;min-height:0!important;height:auto!important;margin:0!important}
+.lsSinBarra select,.lsSinBarra input{padding:0 6px!important;font-size:12px!important;height:20px!important;min-height:0!important}
+.avisoVivo:not(.error){display:none!important}
+.avisoVivo.error{padding:3px 10px!important;font-size:12px!important;line-height:1.3!important;margin-bottom:6px!important;border-radius:6px!important}
+.avisoVivo button{padding:1px 8px!important;font-size:12px!important;min-height:0!important}
+.hstate-emb{display:none!important}
+#lsFrToast{position:fixed;top:6px;right:12px;z-index:2147483000;max-width:min(460px,calc(100vw - 24px));font-family:Calibri,Arial,sans-serif;
+  font-size:12.5px;line-height:1.35;padding:5px 12px;border-radius:9px;box-shadow:0 4px 14px rgba(14,59,54,.18);color:#fff;background:#0F7A5A;
+  opacity:0;transform:translateY(-6px);transition:opacity .25s,transform .25s;pointer-events:none}
+#lsFrToast.ver{opacity:1;transform:none}
+#lsFrToast.err{background:#B42318;pointer-events:auto;padding-right:28px}
+#lsFrToast.cons{background:#B45309}
+#lsFrToast b{font-weight:700}
+#lsFrToast .x{position:absolute;right:8px;top:3px;cursor:pointer;font-weight:700}
+}
+@media print{#lsFrToast{display:none!important}}
+</style>
+<script id="lsFrJs">(function(){try{
+  var ERR=/error|no se pudo|sin conexi|desconectad|fall[oó]|no carg|sin acceso/i;
+  var PERM=/solo consulta|sin permiso|no tien[ea]s? permiso|solo para consultar|modo consulta|solo lectura/i;
+  var CARGA=/cargando|conectando|leyendo|actualizando|enviando/i;
+  function strip(){return document.querySelector('.lsSinBarra');}
+  function oculto(e){if(e.style&&e.style.display==='none')return true;try{return getComputedStyle(e).display==='none';}catch(x){return false;}}
+  function esCtl(e){return /^(A|BUTTON|SELECT|INPUT)$/.test(e.tagName)||!!e.querySelector('a,button,select,input');}
+  /* 1) La tira solo conserva botones y enlaces; si no queda ninguno visible, desaparece. */
+  function esCtlPropio(e){return /^(A|BUTTON|SELECT|INPUT)$/.test(e.tagName);}
+  /* Dentro de un bloque con botón (ej. nombre + Cambiar), el texto se oculta y queda solo el botón. */
+  function limpiaCont(c){Array.prototype.slice.call(c.childNodes).forEach(function(n){
+      if(n.nodeType===3){if(n.nodeValue.trim()){var sp=document.createElement('span');sp.className='lsFrTx';c.insertBefore(sp,n);sp.appendChild(n);}}
+      else if(n.nodeType===1&&!esCtlPropio(n)&&!n.classList.contains('lsFrTx')){if(esCtl(n))limpiaCont(n);else if(!n.classList.contains('lsFrOc'))n.classList.add('lsFrOc');}});}
+  function ordenar(){var s=strip();if(!s)return;var vis=0;
+    Array.prototype.forEach.call(s.children,function(e){
+      if(esCtl(e)){if(e.classList.contains('lsFrOc'))e.classList.remove('lsFrOc');if(!esCtlPropio(e))limpiaCont(e);if(!oculto(e))vis++;}
+      else if(!e.classList.contains('lsFrOc'))e.classList.add('lsFrOc');});
+    if(s.classList.contains('lsFrVacia')!==(vis===0))s.classList.toggle('lsFrVacia',vis===0);}
+  /* 2) Avisos flotantes. */
+  var T=null,tm=null,listo=false,consDicho=false,t0=Date.now();
+  function toast(html,cls,ms){if(!document.body)return;if(!T){T=document.createElement('div');T.id='lsFrToast';T.setAttribute('role','status');document.body.appendChild(T);}
+    clearTimeout(tm);T.className=cls||'';T.innerHTML=html;void T.offsetWidth;T.classList.add('ver');
+    if(cls==='err'){var x=document.createElement('span');x.className='x';x.textContent='✕';x.onclick=function(){T.classList.remove('ver');};T.appendChild(x);}
+    if(ms)tm=setTimeout(function(){T.classList.remove('ver');},ms);}
+  function esc(t){return String(t).replace(/[&<>"]/g,function(c){return{'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c];});}
+  function textoEstado(){var s=strip(),t='';
+    if(s)Array.prototype.forEach.call(s.querySelectorAll('.lsFrOc,.lsFrTx'),function(e){if(!oculto(e))t+=' '+(e.textContent||'');});
+    return t.replace(/\s+/g,' ').trim();}
+  var errMostrado='';
+  function revisar(){
+    var t=textoEstado(),av=document.querySelector('#avisoVivo,.avisoVivo');
+    if(t&&ERR.test(t)){if(errMostrado!==t){errMostrado=t;toast('<b>Atención:</b> '+esc(t.slice(0,200)),'err');}return;}
+    if(errMostrado){errMostrado='';if(T)T.classList.remove('ver');}
+    if(!consDicho&&t&&PERM.test(t)){var cuerpo=document.body.innerText||'';
+      if(!PERM.test(cuerpo)){consDicho=true;toast('<b>Solo consulta:</b> tu usuario puede ver esta pantalla, pero no registrar ni modificar.','cons',6000);return;}
+      consDicho=true;}
+    if(!listo){var cargando=(t&&CARGA.test(t))||(av&&!/\b(ok|error)\b/.test(av.className));
+      if(document.readyState==='complete'&&(!cargando||Date.now()-t0>25000)){listo=true;
+        if(av&&/\berror\b/.test(av.className))return;
+        var d=new Date(),h=('0'+d.getHours()).slice(-2)+':'+('0'+d.getMinutes()).slice(-2);
+        setTimeout(function(){if(!errMostrado)toast('Actualizado · '+h,'',2500);},consDicho&&T&&T.classList.contains('ver')?6200:300);}}}
+  /* 3) Sin "Supabase" en lo visible. */
+  var R=[[/\s*[·|,-]\s*fuente\s*:\s*Supabase\b/gi,''],[/\bfuente\s*:\s*Supabase\b\s*/gi,'Fuente: base de datos LIVES '],
+         [/\s*[·|]\s*Supabase\b/g,''],[/\bSupabase\s*[·|]\s*/g,''],[/\s*\(\s*Supabase\s*\)/gi,''],
+         [/\b(en|a|de|desde|con)\s+Supabase\b/gi,'$1 la base de datos'],[/\bSupabase\b/gi,'la base de datos']];
+  function limpia(t){var x=t;R.forEach(function(r){x=x.replace(r[0],r[1]);});return x.replace(/de la la base/gi,'de la base').replace(/en la la base/gi,'en la base');}
+  var SKIP=/^(SCRIPT|STYLE|NOSCRIPT|TEXTAREA|CODE|PRE)$/;
+  function nodo(n){if(n.nodeValue&&/upabase/i.test(n.nodeValue)){var p=n.parentNode;if(p&&!SKIP.test(p.nodeName)){var v=limpia(n.nodeValue);if(v!==n.nodeValue)n.nodeValue=v;}}}
+  function arbol(r){if(!r)return;if(r.nodeType===3){nodo(r);return;}if(r.nodeType!==1||SKIP.test(r.nodeName))return;
+    if(!/upabase/i.test(r.textContent||'')&&!/upabase/i.test(r.title||''))return;
+    if(/upabase/i.test(r.title||''))r.title=limpia(r.title);
+    var w=document.createTreeWalker(r,4,null),t;while((t=w.nextNode()))nodo(t);
+    Array.prototype.forEach.call(r.querySelectorAll('[title*="upabase"]'),function(e){e.title=limpia(e.title);});}
+  if(/upabase/i.test(document.title))document.title=limpia(document.title);
+  var pend=[],prog=false;
+  function correr(){prog=false;var l=pend;pend=[];l.forEach(arbol);ordenar();revisar();}
+  function inicio(){arbol(document.body);ordenar();revisar();
+    new MutationObserver(function(ms){var mio=true;ms.forEach(function(m){var n=m.target;if(!(T&&(n===T||T.contains(n))))mio=false;
+        if(m.type==='characterData')pend.push(m.target);else for(var i=0;i<m.addedNodes.length;i++)pend.push(m.addedNodes[i]);});
+      if(mio)return;if(!prog){prog=true;Promise.resolve().then(correr);}}).observe(document.body,{childList:true,subtree:true,characterData:true,attributes:true,attributeFilter:['class','style']});
+    window.addEventListener('load',function(){setTimeout(revisar,50);});
+    var k=0,iv=setInterval(function(){revisar();if(listo||++k>60)clearInterval(iv);},500);}
+  /* 4) Portal antiguo con versión vieja abierta: se recarga entero para que aparezca el aviso de mudanza. */
+  try{
+    if (window.top !== window){
+      var tp = window.top.location;   /* si el portal es de otro dominio (app.lives.com.pe) esto falla y no se hace nada */
+      if (tp.hostname === location.hostname && /^\/lives-portal\//.test(tp.pathname) &&
+          !window.top.document.getElementById('lsMudJs')){
+        /* Una sola vez cada 10 minutos: si el portal aún no tiene la versión nueva publicada, no se recarga en bucle. */
+        var ss = window.top.sessionStorage, ult = +(ss.getItem('lsMudRecarga') || 0);
+        if (Date.now() - ult > 600000){ ss.setItem('lsMudRecarga', String(Date.now())); window.top.location.reload(); }
+      }
+    }
+  }catch(e){}
+  if(document.body)inicio();else document.addEventListener('DOMContentLoaded',inicio);
+}catch(e){}})();</script>
+<style id="lsBaCss">
+@media screen{
+.lsBaOc{display:none!important}
+.lsAcc{display:inline-flex;align-items:center;gap:8px;flex-wrap:wrap;margin-left:auto}
+.lsBarra{display:flex;align-items:center;gap:8px;flex-wrap:wrap;justify-content:flex-start;background:#fff;border:1px solid #DCE5E2;border-radius:12px;padding:8px 12px;margin:0 0 12px;box-shadow:0 1px 3px rgba(14,59,54,.06)}
+.lsBarra>.lsAcc:only-child{margin-left:auto}
+.lsTop{display:flex;align-items:center;gap:8px;flex-wrap:wrap;margin:0 0 10px;padding:0 0 10px;border-bottom:1px solid #E6EEEB;width:100%;flex-basis:100%}
+.lsTop>*{margin:0!important}
+.lsBarra>*{margin-top:0!important;margin-bottom:0!important}
+.lsBaFijo{position:sticky!important;top:0;z-index:30}
+.lsBaSuelta{position:static!important}
+.lsPegada .lsAccBtn{display:none!important}
+button.lsBtn,a.lsBtn{font-family:inherit;font-size:13px;font-weight:700;border-radius:8px;padding:8px 14px;cursor:pointer;border:1px solid #DCE5E2;background:#fff;color:#0F7A5A;min-height:36px;line-height:1.2;text-decoration:none;display:inline-flex;align-items:center;gap:6px;box-shadow:none}
+button.lsBtn:hover,a.lsBtn:hover{border-color:#0F7A5A;background:#fff}
+button.lsBtn.pri,button.lsBtn.primary{background:#0F7A5A;color:#fff;border-color:#0F7A5A}
+button.lsBtn.pri:hover,button.lsBtn.primary:hover{background:#0B815E;color:#fff}
+button.lsBtn:disabled{opacity:.5;cursor:not-allowed}
+}
+</style>
+<script id="lsBaJs">(function(){try{
+  /* v6.1 · Botones de exportar, imprimir, actualizar y similares: van en la barra de filtros (no flotando arriba).
+     Grupos de botones sueltos arriba (pestañas como "Mejoras / Reporte", "Volver", menús de vista) también
+     entran a la barra de filtros; si la pantalla no tiene barra, se les crea una. Al cambiar de pestaña,
+     las pestañas pasan a la barra de la vista que queda abierta.
+     La barra con filtros queda fija al bajar (si no es muy alta); los botones de acción se esconden mientras
+     está fija y vuelven al subir. El dato de "N registros · datos al …" no se muestra.
+     No cambia cálculos, datos ni guardados: solo ubica botones que ya existen. Acabados (Lady) no se toca. */
+  if(/\/formulario-acabados\//.test(location.pathname))return;
+  var SIN_GRUPOS=/\/Tienda-lives\/(index\.html)?$/i.test(location.pathname);
+  var ACC=/^(exportar|descargar|imprimir|actualizar|recargar|compartir|copiar enlace)\b|\b(excel|pdf|html|csv)\b/i;
+  var EST=/(datos al \d|le[ií]d[oa]s? a las|datos de las \d|actualizad[oa] a las|[uú]ltima (lectura|actualizaci)|datos en vivo|en vivo ·)/i;
+  var BARRA='.bar,.toolbar,.filtros,.filters,.fbar,.filterbar,.barra,.controles,.controls,.fbarra,.fpanel,[class*="barra"]:not(.lsSinBarra):not(.lsBarra),[class*="filtro"],[class*="filter"],[class*="toolbar"]';
+  var CTL='select,input:not([type=hidden]):not([type=file]):not([type=button]):not([type=submit])';
+  var FUERA='dialog,[role=dialog],.modal,.ficha-card,.mbox,.ventana,#lsFrToast,#lsAct,#lsMud,.lsSinBarra';
+  var ALTO_FIJO=180;
+  function vis(e){if(!e||!e.getBoundingClientRect)return false;var r=e.getBoundingClientRect();if(r.width<=0||r.height<=0)return false;var s=getComputedStyle(e);return s.visibility!=='hidden'&&s.display!=='none';}
+  function txt(e){return (e.textContent||'').replace(/\s+/g,' ').trim();}
+  function limpio(t){return t.replace(/^[^A-Za-zÁÉÍÓÚáéíóúÑñ0-9]+/,'');}
+  function esAcc(b){if(b.closest('#lsFrToast,#lsAct,#lsMud,.lsSinBarra .lsFrOc'))return false;var t=limpio(txt(b));return t.length>0&&t.length<40&&ACC.test(t);}
+  function poner(e,c){if(!e.classList.contains(c))e.classList.add(c);}
+  function hayCtl(e){return Array.prototype.some.call(e.querySelectorAll('a,button,'+CTL+',textarea,canvas,img,table,svg'),vis);}
+  function enBarra(e){var b=e.closest(BARRA);return b&&!b.closest('.lsSinBarra')?b:null;}
+  function externa(b){var p=b.parentElement&&b.parentElement.closest(BARRA);while(p&&!p.closest('.lsSinBarra')&&vis(p)){b=p;p=b.parentElement&&b.parentElement.closest(BARRA);}return b;}
+  function barraFiltros(){var c=Array.prototype.filter.call(document.querySelectorAll(BARRA),function(b){return vis(b)&&!b.closest(FUERA)&&!b.closest('.modal:not(.on):not(.show):not(.abierto)')&&Array.prototype.some.call(b.querySelectorAll(CTL),vis);}).map(externa);
+    c.sort(function(a,b){return a.getBoundingClientRect().top-b.getBoundingClientRect().top;});return c[0]||null;}
+  function contScroll(e){var p=e.parentElement;while(p&&p!==document.body){var o=getComputedStyle(p).overflowY;if(o==='auto'||o==='scroll')return p;p=p.parentElement;}return null;}
+  /* ¿todo lo que se ve dentro de e son botones o enlaces? (sin campos, tablas, gráficos ni texto suelto) */
+  function soloBotones(e){
+    if(e.querySelector(CTL+',textarea,table,canvas,iframe,video'))return false;
+    var w=document.createTreeWalker(e,NodeFilter.SHOW_TEXT,null,false),n;
+    while((n=w.nextNode())){if(!n.nodeValue.trim())continue;var p=n.parentElement;if(!p||!vis(p))continue;if(!p.closest('button,a,[role=tab]'))return false;}
+    return Array.prototype.some.call(e.querySelectorAll('button,a,[role=tab]'),vis);}
+  function estilo(b){try{var s=getComputedStyle(b);return [s.backgroundColor,s.color,s.borderTopColor,s.borderTopWidth].join('|');}catch(e){return '';}}
+  function grande(e){return Array.prototype.some.call(e.matches&&e.matches('button,a,[role=tab]')?[e]:e.querySelectorAll('button,a,[role=tab]'),function(x){return vis(x)&&x.getBoundingClientRect().height>56;});}
+  function grupoDe(b){
+    var g=b,p=b.parentElement;
+    while(p&&p!==document.body&&!p.matches(BARRA)&&!p.matches('main,header,section,article,form,.wrap,.container,.contenedor')&&soloBotones(p)&&p.getBoundingClientRect().height<90){g=p;p=p.parentElement;}
+    if(g===b){var q=b.parentElement;if(!q||!soloBotones(q))return null;}
+    return g;}
+  /* ¿e ya está dentro de una tarjeta o caja con fondo o borde? entonces no está "en el aire" */
+  function enCaja(e){var fondo=getComputedStyle(document.body).backgroundColor,p=e.parentElement;
+    while(p&&p!==document.body&&p!==document.documentElement){var s=getComputedStyle(p);
+      var bg=s.backgroundColor;if(bg&&bg!=='rgba(0, 0, 0, 0)'&&bg!=='transparent'&&bg!==fondo)return true;
+      if(parseFloat(s.borderTopWidth)>0&&s.borderTopStyle!=='none'&&parseFloat(s.borderLeftWidth)>0)return true;
+      if(s.boxShadow&&s.boxShadow!=='none')return true;p=p.parentElement;}
+    return false;}
+  var F=null,FIX=null,MOV=[];
+  function cajaTop(f){var c=f.querySelector(':scope > .lsTop');if(!c){c=document.createElement('div');c.className='lsTop';f.insertBefore(c,f.firstChild);}return c;}
+  function aCasa(m){if(!m.bar){m.bar=document.createElement('div');m.bar.className='lsBarra';m.casa.parentNode.insertBefore(m.bar,m.casa.nextSibling);}
+    if(m.g.parentNode!==m.bar)m.bar.appendChild(m.g);m.bar.style.display='';}
+  function ubicar(m,f){
+    if(f&&!f.contains(m.g)){cajaTop(f).appendChild(m.g);if(m.bar)m.bar.style.display='none';}
+    else if(!f)aCasa(m);}
+  function arreglar(){
+    var f=barraFiltros(),tope=f?f.getBoundingClientRect().top:260;
+    /* 1) dato de estado arriba */
+    Array.prototype.forEach.call(document.querySelectorAll('div,span,p,small'),function(e){
+      if(e.classList.contains('lsBaOc')||e.children.length>3||!vis(e))return;var t=txt(e);
+      if(t.length>160||!EST.test(t)||hayCtl(e))return;if(e.getBoundingClientRect().top>tope+4)return;
+      if(e.closest('.lsAcc,.lsBarra,.lsTop,'+BARRA))return;poner(e,'lsBaOc');});
+    /* 0) grupos ya movidos que quedaron escondidos (cambio de pestaña): pasan a la barra visible o vuelven a su sitio */
+    MOV.forEach(function(m){var casaVis=m.casa.parentNode&&vis(m.casa.parentNode);
+      if(!casaVis){if(m.g.previousSibling!==m.casa)m.casa.parentNode.insertBefore(m.g,m.casa.nextSibling);if(m.bar)m.bar.style.display='none';return;}
+      if(!vis(m.g)||m.g.previousSibling===m.casa||(f&&m.bar&&m.g.parentNode===m.bar))ubicar(m,f);});
+    /* 2) botones de exportar/imprimir/actualizar flotando encima de la barra */
+    var sueltos=Array.prototype.filter.call(document.querySelectorAll('button,a.btn,a[class*="btn"]'),function(b){
+      if(!vis(b)||!esAcc(b)||b.closest('.lsAcc,.lsBarra,.lsTop'))return false;if(f&&f.contains(b))return false;
+      if(b.closest(FUERA))return false;
+      var r=b.getBoundingClientRect();if(f)return r.bottom<=tope+2;
+      return r.top<200&&!enBarra(b)&&!b.closest('.panel,.card,.kpi,form,table');});
+    if(sueltos.length){
+      var dest=f,caja;
+      if(!dest){var ref=sueltos[0];var fila=ref.parentElement;dest=document.createElement('div');dest.className='lsBarra';fila.parentNode.insertBefore(dest,fila);caja=dest;}
+      else{caja=dest.querySelector(':scope > .lsAcc');if(!caja){caja=document.createElement('span');caja.className='lsAcc';dest.appendChild(caja);}}
+      sueltos.forEach(function(b){var antes=b.parentElement,e0=estilo(b);caja.appendChild(b);if(estilo(b)!==e0)poner(b,'lsBtn');
+        var p=antes,n=0;while(p&&p!==document.body&&n<4){if(p.contains(dest))break;if(!hayCtl(p)&&p.getBoundingClientRect().height<140){poner(p,'lsBaOc');p=p.parentElement;n++;}else break;}});
+    }
+    /* 2b) otros grupos de botones sueltos arriba (pestañas, Volver, vistas): a la barra; si no hay barra, se les crea una */
+    if(!SIN_GRUPOS){
+      var lim=f?f.getBoundingClientRect().top:220,vistos=[];
+      Array.prototype.forEach.call(document.querySelectorAll('button,a,[role=tab]'),function(b){
+        if(!vis(b)||!txt(b)||b.closest('.lsAcc,.lsBarra,.lsTop,aside,nav,[class*="side"],[class*="menu"],form,table,'+FUERA))return;
+        if(f&&f.contains(b))return;if(enBarra(b))return;
+        var s=getComputedStyle(b);if(s.position==='fixed'||s.position==='absolute')return;
+        var r=b.getBoundingClientRect();if(r.bottom>lim+2||r.top>320)return;
+        if(b.getBoundingClientRect().height>56)return;var g=grupoDe(b);if(!g||vistos.indexOf(g)>=0)return;if(grande(g))return;if(enCaja(g))return;
+        if(g.closest('aside,nav,[class*="side"],[class*="menu"],'+FUERA))return;
+        vistos.push(g);});
+      vistos.forEach(function(g){if(MOV.some(function(m){return m.g===g;}))return;
+        var casa=document.createElement('span');casa.className='lsCasa';casa.style.display='none';g.parentNode.insertBefore(casa,g);
+        var m={g:g,casa:casa,bar:null};MOV.push(m);ubicar(m,f);});
+    }
+    /* 3) barra con filtros fija (si no es muy alta); botones de acción marcados para esconderse mientras está fija */
+    if(f){
+      Array.prototype.forEach.call(f.querySelectorAll('button,a'),function(b){if(esAcc(b))poner(b,'lsAccBtn');});
+      var alta=f.getBoundingClientRect().height>ALTO_FIJO;
+      if(alta){f.classList.remove('lsBaFijo');f.classList.remove('lsPegada');F=null;}
+      else{
+        if(getComputedStyle(f).position==='static'){poner(f,'lsBaFijo');var bg=getComputedStyle(f).backgroundColor;if(!bg||bg==='rgba(0, 0, 0, 0)'||bg==='transparent')f.style.backgroundColor=getComputedStyle(document.body).backgroundColor||'#F1F6F4';}
+        F=f;FIX=contScroll(f);}
+    }
+    /* barras pegajosas que solo tienen botones (sin filtros): que suban con la página */
+    Array.prototype.forEach.call(document.querySelectorAll(BARRA),function(b){if(b===f||!vis(b))return;var s=getComputedStyle(b).position;
+      if((s==='sticky'||s==='fixed')&&!Array.prototype.some.call(b.querySelectorAll(CTL),vis)&&Array.prototype.some.call(b.querySelectorAll('button,a'),esAcc))poner(b,'lsBaSuelta');});
+    pegada();
+  }
+  function pegada(){if(!F||!F.isConnected)return;var top=parseFloat(getComputedStyle(F).top)||0,base=FIX?FIX.getBoundingClientRect().top:0,desp=FIX?FIX.scrollTop:(window.scrollY||document.documentElement.scrollTop);
+    var en=desp>4&&(F.getBoundingClientRect().top-base)<=top+1.5;if(en!==F.classList.contains('lsPegada'))F.classList.toggle('lsPegada',en);}
+  document.addEventListener('scroll',function(){pegada();},true);window.addEventListener('resize',function(){pegada();luego();});
+  document.addEventListener('click',function(){setTimeout(function(){try{arreglar();}catch(e){}},30);},true);
+  var t=null;function luego(){if(t)return;t=setTimeout(function(){t=null;try{arreglar();}catch(e){}},250);}
+  function inicio(){luego();new MutationObserver(function(ms){for(var i=0;i<ms.length;i++){if(ms[i].addedNodes.length||ms[i].removedNodes.length){luego();return;}}}).observe(document.body,{childList:true,subtree:true});
+    window.addEventListener('load',luego);var k=0,iv=setInterval(function(){luego();if(++k>20)clearInterval(iv);},700);}
+  if(document.body)inicio();else document.addEventListener('DOMContentLoaded',inicio);
+  window.__lsBa={arreglar:arreglar,MOV:MOV,F:function(){return F;},bf:barraFiltros};
+}catch(e){}})();</script>
+<!-- ===== fin lives-franja v6.1 ===== -->
+<script id="lsLimp2Js">(function(){try{if(window.top!==window.self)document.documentElement.classList.add("lsEnPortal");}catch(e){document.documentElement.classList.add("lsEnPortal");}var re=/^\s*¿\s*(C[oó]mo|Qu[eé] (hace|pasa))/i,p=0;function f(){p=0;var d=document.querySelectorAll("details");for(var i=0;i<d.length;i++){var s=d[i].querySelector("summary");if(s&&re.test(s.textContent))d[i].style.display="none";}}f();document.addEventListener("DOMContentLoaded",f);try{new MutationObserver(function(){if(!p){p=1;setTimeout(f,60);}}).observe(document.documentElement,{childList:true,subtree:true});}catch(e){}})();</script>
+</body>
+</html>
